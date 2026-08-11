@@ -135,6 +135,9 @@ app.get("/health", (req, res) => {
 app.get("/:id", async (req, res) => {
     await showProduct(req, res)
 })
+process.on("unhandledRejection", (err) => {
+    console.error("Unhandled rejection in a route handler:", err)
+})
 app.listen(5000, () => {
-    console.log("Server is running at port 5000")   
+    console.log("Server is running at port 5000")
 })

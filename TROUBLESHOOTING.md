@@ -1,0 +1,85 @@
+# Troubleshooting Log — Task 1 (Dev EC2 Deployment)
+
+## Issue: Backend container stuck in restart loop
+
+**Symptom**: `docker compose up -d` failed with `dependency backend failed to start`; `ecommerce-backend` kept restarting.
+
+**Root cause**: The published image `abdelazez66/ecommerce-backend:v1` was built from an older commit where the `/:id` catch-all route was registered before `/health`. Express matches routes in registration order, so the Compose healthcheck's request to `/health` fell through to the product-lookup handler (`showProduct`), which tried to cast the string `"health"` to a MongoDB ObjectId and threw an uncaught `CastError`, crashing the Node process.
+
+**Fix**: Rebuilt the images from local source instead of pulling the stale published tag:
+
+```bash
+docker compose up -d --build
+```
+
+Current `server.js` already registers `/health` ahead of `/:id`, so the healthcheck now hits the correct handler. All three services (mongo, backend, frontend) report healthy after the rebuild.
+
+## Environment
+
+- Deployed to a dev EC2 instance (Ubuntu 22.04, t3.small) for this task.
+- `.env` created from `.env.example` with a generated `JWT_SECRET` (`openssl rand -hex 32`).
+- Verified externally:
+  - `GET /health` → `{"status":"ok","database":"connected"}`
+  - `GET /products` → `[]` (empty DB, expected on first boot)
+  - Frontend reachable on port 3000
+
+# Troubleshooting Log — Task 2 (Server Setup & Feature Deployment)
+
+## Database details (as requested by Task 2)
+
+- **Type**: MongoDB 7 (official `mongo:7` image), run as its own container.
+- **Auth**: none configured — the `mongo` service has no root username/password, so the backend connects unauthenticated over the internal Docker network only (not exposed with credentials).
+- **Connection string**: `mongodb://mongo:27017/${MONGO_DATABASE:-ecommerce}` (set automatically by Compose, no manual entry needed).
+- **Database name**: `ecommerce`.
+- **Ports**: frontend `3000→8080` (nginx), backend `5000→5000` (Node/Express), mongo `27017→27017`.
+
+## Issue: Backend crashes (process exits) when adding a product without an image
+
+**Symptom**: `POST /products` with no `image` field killed the whole backend container; all other users lost service until Docker restarted it.
+
+**Root cause**: `addProduct.js` read `req.file.filename` without checking that Multer actually attached a file. The resulting `TypeError` was thrown inside an `async` handler with no `try/catch`, so it became an unhandled promise rejection, which crashes the whole Node process by default.
+
+**Fix**: Added a guard that returns `400` when `req.file` is missing (`backend/handlers/addProduct.js`).
+
+## Issue: Product creation failed with `ENOENT` even with a valid image
+
+**Symptom**: `POST /products` with an image returned `500`, log showed `ENOENT: no such file or directory, open '/app/handlers/images/...'`.
+
+**Root cause**: Multer's disk storage writes to `backend/handlers/images/`, but that directory isn't tracked by git (empty dirs aren't) and nothing created it during the Docker build.
+
+**Fix**: `backend/Dockerfile` now runs `mkdir -p handlers/images` after copying the source.
+
+## Issue: Product image URLs were `undefined/images/...`
+
+**Root cause**: `addProduct.js` builds the image URL from `process.env.REACT_APP_BACKEND_URL`, but `docker-compose.yml` only set that variable for the `frontend` build args, not for the running `backend` container.
+
+**Fix**: Added `REACT_APP_BACKEND_URL` to the `backend` service's `environment` block in `docker-compose.yml`.
+
+## Issue: Backend crashed again on `DELETE /cart` with no `cartItem`
+
+**Root cause**: Same pattern as the image bug — `deleteCart.js` read `req.body.cartItem[0]` without checking it existed.
+
+**Fix**: Added a guard returning `400` when `cartItem` is missing (`backend/handlers/deleteCart.js`).
+
+**Broader fix**: Since this class of bug (unguarded property access crashing the entire process) had now shown up three times in different handlers, added a process-level `unhandledRejection` handler in `server.js` so a single bad request can no longer take down the whole server for every other user. Individual handlers were still patched with proper input guards — the process-level handler is a safety net, not a substitute for validation.
+
+## Issue: Frontend couldn't reach the backend when accessed remotely (browser showed no products)
+
+**Symptom**: Backend and API worked fine over `curl`, but loading the frontend in a browser on a different machine showed an empty product list. Network tab showed `GET http://localhost:5000/products` failing with `ERR_CONNECTION_REFUSED`.
+
+**Root cause**: `REACT_APP_BACKEND_URL` was hardcoded to `http://localhost:${BACKEND_PORT}` in `docker-compose.yml`. That's baked into the React build at build time, so "localhost" resolves to whatever machine the *browser* is running on, not the server — this only works when browsing from the same host running Docker.
+
+**Fix**: Made the value configurable via a new `PUBLIC_BACKEND_URL` variable (defaults to the old `localhost` behavior for local dev, unchanged). Set `PUBLIC_BACKEND_URL=http://<ec2-public-ip>:5000` and `FRONTEND_URL=http://<ec2-public-ip>:3000` (for CORS) in the server's `.env`, then rebuilt.
+
+## Functional testing performed
+
+- Signup + login as both `Retailer` and `Consumer` roles (JWT cookie auth) — pass
+- Add product with image upload as Retailer — pass (after fixes above)
+- List products (`GET /products`) — pass, confirmed in both `curl` and the browser UI
+- Add to cart / view cart / delete cart as Consumer — pass (after fix)
+- Add and fetch product reviews — pass
+- Frontend → Backend → MongoDB round-trip verified end-to-end through the actual browser UI, not just `curl`
+
+## Known limitation (not fixed, out of scope)
+
+Each `POST /cart` call creates a brand-new cart document instead of merging into an existing cart for the user (`addToCart.js` always does `new cart(...).save()`), so a user accumulates multiple cart documents rather than one cart with multiple items. This is an application design issue rather than a deployment bug — flagging it here rather than changing cart business logic under a deployment task.
