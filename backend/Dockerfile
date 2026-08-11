@@ -17,6 +17,7 @@ WORKDIR /app
 
 COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node . .
+RUN mkdir -p handlers/images && chown node:node handlers/images
 
 USER node
 
