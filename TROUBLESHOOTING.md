@@ -83,3 +83,29 @@ Current `server.js` already registers `/health` ahead of `/:id`, so the healthch
 ## Known limitation (not fixed, out of scope)
 
 Each `POST /cart` call creates a brand-new cart document instead of merging into an existing cart for the user (`addToCart.js` always does `new cart(...).save()`), so a user accumulates multiple cart documents rather than one cart with multiple items. This is an application design issue rather than a deployment bug — flagging it here rather than changing cart business logic under a deployment task.
+
+# Troubleshooting Log — Task 3 (Standalone Containerization)
+
+## Issue: Signup failed with "Failed to fetch" when running containers standalone
+
+**Symptom**: Backend and frontend containers were both running and individually healthy (`GET /health` returned `200`), but signing up through the frontend UI failed with a generic error banner. Browser console showed `POST http://localhost:5000/signup net::ERR_FAILED` / `TypeError: Failed to fetch`. Backend logs showed no request had reached the server at all — not even a failed one.
+
+**Root cause**: The backend container was started with `REACT_APP_FRONTEND_URL=http://localhost:3000` (used by the `cors` middleware to set the allowed origin), but the frontend container was actually mapped to host port `3001`. Since the request's `Origin` header (`http://localhost:3001`) didn't match the CORS allow-list, the browser blocked the preflight/request client-side before it ever reached Express — which is why nothing showed up in the backend logs.
+
+**Fix**: Recreated `backend-standalone` with the correct origin:
+```bash
+docker run -d --name backend-standalone --network ecommerce-net -p 5000:5000 \
+  -e MONGO_URI="mongodb://mongo-standalone:27017/ecommerce" \
+  -e JWT_SECRET="temp-local-secret-for-task3" \
+  -e REACT_APP_FRONTEND_URL="http://localhost:3001" \
+  ecommerce-backend-standalone
+```
+
+**Lesson**: When running frontend/backend as separate standalone containers (rather than via `docker-compose`, which wires these values together automatically), the `-p` host port mapping and the `REACT_APP_FRONTEND_URL` env var must be kept in sync manually.
+
+## Standalone containerization verified
+
+- Built and ran the backend (`node:22-alpine`) and frontend (`node:22-alpine` build → `nginx-unprivileged` runtime) as independent containers, not via Compose.
+- MongoDB ran in its own container (`mongo:7`) on a shared Docker network (`ecommerce-net`).
+- Confirmed backend → MongoDB connectivity via `/health`.
+- Confirmed frontend → backend → MongoDB end-to-end via a real signup through the browser UI; verified the resulting user document directly in MongoDB with `mongosh` (password correctly hashed).
