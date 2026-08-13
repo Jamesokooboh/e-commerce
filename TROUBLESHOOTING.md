@@ -109,3 +109,32 @@ docker run -d --name backend-standalone --network ecommerce-net -p 5000:5000 \
 - MongoDB ran in its own container (`mongo:7`) on a shared Docker network (`ecommerce-net`).
 - Confirmed backend → MongoDB connectivity via `/health`.
 - Confirmed frontend → backend → MongoDB end-to-end via a real signup through the browser UI; verified the resulting user document directly in MongoDB with `mongosh` (password correctly hashed).
+
+# Troubleshooting Log — Task 4 (Docker Volume, Network & Container Setup)
+
+## Data persistence verified with a named Docker volume
+
+**Context**: The `mongo-standalone` container from Task 3 had no volume attached, so its data lived only in the container's writable layer — it would survive a `stop`/`start`, but not a `docker rm`.
+
+**Fix**: Created a named volume and mounted it at Mongo's data directory:
+```bash
+docker volume create ecommerce-mongo-data
+docker run -d --name mongo-standalone --network ecommerce-net -p 27017:27017 \
+  -v ecommerce-mongo-data:/data/db mongo:7
+```
+
+**Verification (the real test)**:
+1. Signed up a test user through the frontend UI — confirmed in MongoDB via `mongosh`.
+2. Fully removed the container: `docker stop mongo-standalone && docker rm mongo-standalone`.
+3. Recreated it with the same `-v ecommerce-mongo-data:/data/db` mount.
+4. Queried `db.users.find()` again — the same user document was still there, proving the data lives in the volume independent of the container's lifecycle, not just the container's own filesystem.
+
+## Network verified by container name
+
+Confirmed all three containers (`mongo-standalone`, `backend-standalone`, `frontend-standalone`) are attached to the shared `ecommerce-net` network:
+```bash
+docker network inspect ecommerce-net --format "{{range .Containers}}{{.Name}} {{end}}"
+```
+This is what lets the backend reach Mongo via the hostname `mongo-standalone` (rather than a hardcoded IP) — the same mechanism `docker-compose` sets up automatically, done here by hand to understand it.
+
+No new issues were hit in this task — the volume + network setup worked as expected once done explicitly.
