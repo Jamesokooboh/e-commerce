@@ -138,3 +138,29 @@ docker network inspect ecommerce-net --format "{{range .Containers}}{{.Name}} {{
 This is what lets the backend reach Mongo via the hostname `mongo-standalone` (rather than a hardcoded IP) — the same mechanism `docker-compose` sets up automatically, done here by hand to understand it.
 
 No new issues were hit in this task — the volume + network setup worked as expected once done explicitly.
+
+# Troubleshooting Log — Task 5 (Docker Multi-Stage, Hardening & Multi-Registry Deployment)
+
+## Hardening verification
+
+- `backend/Dockerfile` and `frontend/Dockerfile` already used multi-stage builds from earlier tasks (dependencies/build stage separate from runtime).
+- Confirmed the built backend image excludes dev dependencies: `du -sh /app/node_modules` → 41.6M (production-only, via `npm install --omit=dev`).
+- Confirmed the backend container actually runs as a non-root user, not just declares it: `docker run --rm <image> whoami` → `node`.
+- Frontend runtime stage uses `nginx-unprivileged`, running as UID 101.
+
+## Pushed and verified images on three registries
+
+- Docker Hub: `okoobohjames/ecommerce-backend:latest`, `okoobohjames/ecommerce-frontend:latest`
+- GitHub Container Registry: `ghcr.io/jamesokooboh/ecommerce-backend:latest`, `ghcr.io/jamesokooboh/ecommerce-frontend:latest`
+- AWS ECR: `313951301623.dkr.ecr.us-east-1.amazonaws.com/ecommerce-backend:latest`, `.../ecommerce-frontend:latest`
+- Verified each is independently pullable (`docker pull` from each registry returned the same image digest).
+
+## Issue: Signup failed after pulling and running images from the registry
+
+**Symptom**: Pulled the backend image from Docker Hub and ran it on host port `5001` (to avoid clashing with the still-running Task 3 containers on `5000`). Frontend loaded fine, but signup failed.
+
+**Root cause**: Same class of issue as Task 3 — `REACT_APP_BACKEND_URL` is baked into the frontend's JS bundle at *build* time, not read at container start. The pushed frontend image had `http://localhost:5000` baked in from when it was originally built, so running the backend on a different port (`5001`) broke the frontend's hardcoded API calls. This can't be fixed by changing container ports or env vars at runtime — the frontend image itself would need to be rebuilt with the correct `REACT_APP_BACKEND_URL` build arg for a different port.
+
+**Fix**: Retired the older Task 3 standalone containers (superseded by this task's registry-pulled versions) and freed up their ports, then ran the Task 5 containers on the same ports (5000/3000) the frontend image already expects, avoiding an unnecessary rebuild.
+
+**Lesson**: When distributing a frontend image via a registry, the backend URL baked into it should either point to a stable, well-known hostname (not `localhost`), or the image should be rebuilt per-environment with the correct `REACT_APP_BACKEND_URL` build arg — reusing the same image across different port mappings will silently break API calls.
