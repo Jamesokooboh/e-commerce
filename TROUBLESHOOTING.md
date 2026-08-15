@@ -164,3 +164,39 @@ No new issues were hit in this task — the volume + network setup worked as exp
 **Fix**: Retired the older Task 3 standalone containers (superseded by this task's registry-pulled versions) and freed up their ports, then ran the Task 5 containers on the same ports (5000/3000) the frontend image already expects, avoiding an unnecessary rebuild.
 
 **Lesson**: When distributing a frontend image via a registry, the backend URL baked into it should either point to a stable, well-known hostname (not `localhost`), or the image should be rebuilt per-environment with the correct `REACT_APP_BACKEND_URL` build arg — reusing the same image across different port mappings will silently break API calls.
+
+# Troubleshooting Log — Task 6 (Orchestration Using Docker Compose)
+
+## Issue: `docker compose up` failed with "ports are not available... forbidden by its access permissions"
+
+**Symptom**: Mongo started fine, but the backend service got stuck at "Starting" and then failed with:
+```
+Error response from daemon: ports are not available: exposing port TCP 0.0.0.0:5000 -> 127.0.0.1:0: listen tcp 0.0.0.0:5000: bind: An attempt was made to access a socket in a way forbidden by its access permissions.
+```
+`netstat -ano | findstr :5000` showed nothing listening on that port — no ordinary process conflict.
+
+**Root cause**: Windows/Hyper-V reserves dynamic port ranges for its own use (visible via `netsh interface ipv4 show excludedportrange protocol=tcp`), and Docker Desktop can't bind a container port that falls inside one of those ranges even though nothing is actually using it. Both the default backend port (`5000`, inside `4916–5015`) and the default frontend port (`3000`, inside `2942–3041`) happened to fall inside excluded ranges on this machine. A second attempt at port `5050` also failed for the same reason (inside `5041–5140`) — these ranges can shift between reboots, so a port that's free one day may not be the next.
+
+**Fix**: Changed `BACKEND_PORT` and `FRONTEND_PORT` in `.env` to values outside any excluded range (`5500` and `8081`). Not a code fix — purely a local environment/port-selection issue, worth checking with `netsh` whenever a Docker port bind fails with a permissions-style error rather than a plain "already in use" error.
+
+## Issue: Signup failed again after switching to Compose (same root cause as Tasks 3 & 5)
+
+**Symptom**: All three services reported healthy via `docker compose ps`, but signup through the browser UI failed.
+
+**Root cause**: Third occurrence of the same underlying issue: the pre-pushed frontend image (`okoobohjames/ecommerce-frontend:latest`, from Task 5) had `REACT_APP_BACKEND_URL=http://localhost:5000` baked in at build time. Since the Hyper-V port conflict forced the backend onto port `5500` instead, the frontend's compiled JS was calling the wrong port.
+
+**Fix**: Rather than relying on the pre-pushed image, forced Compose to rebuild the frontend locally against the current `.env`:
+```bash
+docker compose up -d --build frontend
+```
+The `frontend` service's `build.args` already reads `PUBLIC_BACKEND_URL` (falling back to `localhost:${BACKEND_PORT}`) from `.env` — a mechanism added back in Task 2 — so rebuilding picked up the correct port automatically. No code changes needed, just using the build path instead of the pulled-image path when the environment's ports don't match what the image was built for.
+
+## Restart policy verified
+
+- All services use `restart: unless-stopped` and have healthchecks defined in `docker-compose.yml`.
+- Fully quit and reopened Docker Desktop (simulating a host/daemon restart), then confirmed via `docker inspect <container> --format "{{.State.StartedAt}}"` that the backend and frontend containers had genuinely new `StartedAt` timestamps matching the restart time — proving they came back automatically rather than the `ps` output just showing stale state.
+- Mongo's container stayed continuously running through the same Docker Desktop restart (a WSL2 backend quirk) but remained healthy throughout — noted as an observation, not a problem.
+
+## Clean shutdown verified
+
+`docker compose down` (without `-v`) stops and removes containers/network but preserves the named `ecommerce_mongo_data` volume, so a subsequent `docker compose up -d` starts with existing data intact rather than a fresh empty database.
