@@ -200,3 +200,39 @@ The `frontend` service's `build.args` already reads `PUBLIC_BACKEND_URL` (fallin
 ## Clean shutdown verified
 
 `docker compose down` (without `-v`) stops and removes containers/network but preserves the named `ecommerce_mongo_data` volume, so a subsequent `docker compose up -d` starts with existing data intact rather than a fresh empty database.
+
+# Troubleshooting Log — Task 7 (Jenkins CI/CD Pipeline on AWS EC2)
+
+## Issue: Instance too small to run Jenkins alongside the existing app
+
+**Symptom**: Before installing Jenkins, checked `free -h` on the existing Task 1 EC2 instance (`t3.small`, 1.9GB RAM) and found only 72MB free, since the e-commerce app (backend, frontend, mongo) had already been running continuously for 4 days.
+
+**Root cause**: Jenkins itself needs headroom for its JVM, and this task's pipeline runs `npm install`/`npm run build` (inside the Docker build) plus multiple concurrent `docker build`/`docker push` operations — all memory-hungry. Running that on top of an already-tight instance would risk OOM kills mid-build.
+
+**Fix**: Resized the instance from `t3.small` (2GB RAM) to `m7i-flex.large` (8GB RAM, 2 vCPU) via `aws ec2 modify-instance-attribute` (required a stop/start, and the public IP changed since no Elastic IP was attached — updated the security group and all references to the new IP afterward).
+
+## Docker permissions for the `jenkins` system user
+
+By default the `jenkins` user isn't in the `docker` group, so pipeline steps that call `docker` fail with a permission error. Fixed with:
+```bash
+sudo usermod -aG docker jenkins
+sudo systemctl restart jenkins
+```
+Verified two ways before building the real pipeline: directly via SSH (`sudo -u jenkins docker run --rm hello-world`), and from inside Jenkins itself via a throwaway freestyle job running the same command — both had to work independently, since SSH access working doesn't guarantee the Jenkins service's own environment/group membership is correct until the service restarts.
+
+## Credentials management
+
+Configured four credentials in Jenkins (Manage Jenkins → Credentials) rather than hardcoding any secret in the `Jenkinsfile`:
+- `github-token` (Username with password) — for cloning the private repo
+- `dockerhub-creds` (Username with password) — for `docker login`
+- `aws-access-key-id` / `aws-secret-access-key` (Secret text) — used via `aws ecr get-login-password` for ECR auth
+
+All four are pulled into the pipeline via `withCredentials`, so nothing is ever printed to build logs or committed to the repo.
+
+## Pipeline result
+
+First run of the `Jenkinsfile` succeeded end-to-end on the first attempt (`Finished: SUCCESS`): checked out the `feature/James-Okooboh` branch, built backend and frontend Docker images, pushed both (tagged with the Jenkins build number and `latest`) to Docker Hub and AWS ECR, then verified by pulling the just-pushed images back down from both registries.
+
+## GitHub webhook
+
+Created the webhook via the GitHub API (`repos/.../hooks`) pointing at `http://<jenkins-ip>:8080/github-webhook/`, and enabled "GitHub hook trigger for GITScm polling" on the Jenkins job. Confirmed the initial `ping` event delivered with a `200` status, proving GitHub can reach Jenkins over the public IP/port before relying on a real push to trigger a build.
