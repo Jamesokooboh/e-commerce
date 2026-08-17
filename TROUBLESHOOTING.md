@@ -258,3 +258,39 @@ Created the webhook via the GitHub API (`repos/.../hooks`) pointing at `http://<
 ## Pipeline result
 
 Extended the Task 7 `Jenkinsfile` with two new stages: cleaning up the local per-build image tags after a successful push (`docker rmi ... || true`, so failures don't fail the build), and deploying with `docker compose pull && up -d` against the persistent compose setup, followed by a verification stage that actually curls `/health` and the frontend root and fails the build (`curl -sf`) if either doesn't respond. Build #3 (triggered by the redelivered webhook after fixing the URL) completed `SUCCESS`: images built, pushed, local copies cleaned up, Compose recreated all three containers from the freshly pushed `:latest` images, and both health checks passed.
+
+# Troubleshooting Log — Task 9 (Kubernetes Deployment with Kind & EC2)
+
+## Instance reuse decision
+
+Reused the existing Jenkins/app EC2 instance (`m7i-flex.large`, 8GB RAM) instead of launching a new dedicated one. A 3-node Kind cluster (1 control-plane + 2 workers, each a full node running as its own container with kubelet/containerd/etc.) is heavier than the task doc's suggested `t2.medium` (4GB) comfortably supports alongside Jenkins and the running app — the existing instance had 6.4GB available, which was enough headroom, and avoided paying for a second running instance.
+
+## Issue: NodePort services unreachable from the host
+
+**Symptom**: After deploying backend and frontend as `NodePort` services (`30050`, `30080`) and confirming all pods `Running`, `curl http://localhost:30050/health` from the EC2 host itself timed out completely (`curl: (7) Failed to connect`).
+
+**Root cause**: Kind runs each "node" as a Docker container on the host, and by default only the Kubernetes API server port is mapped out to the host — NodePort services are reachable from *inside* the Kind Docker network but not from the host machine unless explicitly configured.
+
+**Fix**: Deleted and recreated the cluster with `extraPortMappings` in the Kind config, mapping the control-plane container's `30050`/`30080` to the same host ports:
+```yaml
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30050
+        hostPort: 30050
+      - containerPort: 30080
+        hostPort: 30080
+```
+After recreating with this config and reapplying all manifests, both NodePorts responded correctly from the host.
+
+## Avoiding the recurring build-time backend URL bug (this project's most common issue)
+
+Rather than let the frontend's `:latest` image (built with `http://localhost:5000` baked in, used by the Compose deployment on this same instance) also serve the Kubernetes deployment — which would break signup again, exactly as happened in Tasks 3, 5, 6, and 8 — built a separate `okoobohjames/ecommerce-frontend:k8s` tag with `REACT_APP_BACKEND_URL=http://<ec2-ip>:30050` (the backend's actual NodePort) baked in via `--build-arg`, and referenced that tag specifically in `k8s/frontend.yaml`. This keeps the Kubernetes and Compose deployments independent instead of fighting over what `:latest` should mean.
+
+## Verification performed
+
+- Cluster: `kubectl get nodes` — 1 control-plane + 2 workers, all `Ready`.
+- Deployment: `kubectl get pods` — backend (2 replicas), frontend (2 replicas), mongo (1 replica), all `Running`/`1/1`.
+- Backend → Database: `POST /signup` through the NodePort succeeded and the health endpoint reports `"database":"connected"`.
+- Frontend → Backend: frontend served correctly (`HTTP 200`) with the `:k8s` image's baked-in URL matching the backend's actual NodePort.
+- Scaling: `kubectl scale deployment backend --replicas=3` — Kubernetes created a third pod automatically, reaching `3/3 Ready` without any other changes.
