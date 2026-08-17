@@ -326,3 +326,28 @@ The ConfigMap stores `FRONTEND_URL`, but the backend code actually reads `proces
 ## Full-stack communication verified inside the namespace
 
 `POST /signup` through the frontend's NodePort succeeded end-to-end: frontend (serving via NodePort) → backend (2 replicas, ConfigMap/Secret-driven config) → MongoDB (StatefulSet, PVC-backed) → response confirmed and the document persisted.
+
+# Troubleshooting Log — Task 11 (Resource Management & Auto Scaling with Kind)
+
+## Issue: `kubectl top pods` failed with "Metrics API not available"
+
+**Symptom**: After installing the standard Metrics Server manifest, `kubectl top pods` returned `error: Metrics API not available` even though the `metrics-server` Deployment showed `Available`.
+
+**Root cause**: Metrics Server tries to connect to each node's kubelet over TLS using the kubelet's serving certificate, which Kind's nodes don't have properly signed by a CA Metrics Server trusts by default. This is a well-known Kind-specific gotcha, not a real cluster misconfiguration.
+
+**Fix**: Patched the `metrics-server` Deployment to add `--kubelet-insecure-tls` to its container args, which is fine for a local Kind cluster (would not be appropriate for a real production cluster). After the patch and a short wait for the pod to restart, `kubectl top pods` returned real CPU/memory numbers.
+
+## Issue: Backend pods restarted (exit 137) during the load test
+
+**Symptom**: During the Apache Bench load test (100 concurrent requests for 2 minutes), one backend pod restarted once. `kubectl describe pod` showed repeated `Readiness probe failed` / `Liveness probe failed` events with `context deadline exceeded (Client.Timeout exceeded while awaiting headers)`, and `Last State: Terminated, Reason: Error, Exit Code: 137` (SIGKILL, sent by the kubelet after the liveness probe failed enough times).
+
+**Root cause**: The probes' default `timeoutSeconds: 1` was too tight for a pod actively being CPU-throttled by its own `resources.limits.cpu: 500m` while under heavy synthetic load — the `/health` endpoint was still working, it just occasionally took slightly longer than 1 second to respond while the container was CPU-starved, and the kubelet killed it after enough consecutive timeouts.
+
+**Fix**: Widened both probes to `timeoutSeconds: 5` with `failureThreshold: 3`, giving a throttled pod more room to answer before being considered unhealthy, rather than removing or loosening the resource limits themselves (which are what actually makes the HPA's CPU-percentage metric meaningful in the first place).
+
+## Autoscaling and load test results
+
+- Applied the `backend-hpa` HorizontalPodAutoscaler (target 50% CPU, min 2 / max 5 replicas). Confirmed it read real metrics (`cpu: 1%/50%`) rather than `<unknown>`, which would have meant Metrics Server wasn't reachable.
+- Ran `ab -n 50000 -c 100 -t 120 http://localhost:30050/products`: 43,156 requests completed, **0 failed requests**, ~360 req/sec sustained.
+- Watched the HPA scale the backend Deployment from 2 → 5 replicas (its configured max) as CPU utilization climbed to 253% of the target during the load test.
+- After the load test ended, confirmed the HPA's default 5-minute stabilization window before scaling back down — after waiting it out, the deployment returned to 2 replicas with CPU back down to ~1%, and the two remaining pods had 0 restarts.
