@@ -236,3 +236,25 @@ First run of the `Jenkinsfile` succeeded end-to-end on the first attempt (`Finis
 ## GitHub webhook
 
 Created the webhook via the GitHub API (`repos/.../hooks`) pointing at `http://<jenkins-ip>:8080/github-webhook/`, and enabled "GitHub hook trigger for GITScm polling" on the Jenkins job. Confirmed the initial `ping` event delivered with a `200` status, proving GitHub can reach Jenkins over the public IP/port before relying on a real push to trigger a build.
+
+# Troubleshooting Log — Task 8 (Jenkins Pipeline with Docker Hub & Docker Compose)
+
+## Issue: Stopping the EC2 instance between tasks breaks the webhook
+
+**Symptom**: After stopping the instance (to save cost between Task 7 and Task 8) and starting it again, it came back with a new public IP (no Elastic IP attached). The GitHub webhook was still configured with the *old* IP, so the first push after restarting silently failed to reach Jenkins — no build was triggered.
+
+**Root cause**: A `stop`/`start` cycle on an EC2 instance without an Elastic IP always assigns a new public IP. Nothing about that is unique to Jenkins/webhooks, but it's an easy thing to forget to update.
+
+**Fix**: Updated the webhook's URL via the GitHub API (`PATCH repos/.../hooks/:id`) to the new IP, verified with a fresh `ping` (200 OK), then manually redelivered the failed push event's webhook attempt (`POST .../deliveries/:id/attempts`) rather than making a throwaway commit just to retrigger it.
+
+**Lesson**: Anything that hardcodes a server's IP (webhook URLs, `.env` `PUBLIC_BACKEND_URL`/`FRONTEND_URL`, security group rules) needs to be revisited every time the instance restarts without an Elastic IP. Worth attaching an Elastic IP if this instance needs to survive many more stop/start cycles.
+
+## Deploying via Docker Compose from a Jenkins pipeline
+
+**Challenge**: `.env` is gitignored (correctly, since it holds `JWT_SECRET`), so it's never present in Jenkins' checked-out workspace, which is also wiped and recreated for every build.
+
+**Fix**: Kept a persistent `.env` and `docker-compose.yml` at a fixed path on the instance (`/home/ubuntu/e-commerce`, outside the ephemeral Jenkins workspace), updated `FRONTEND_IMAGE`/`BACKEND_IMAGE` there to point at the images this pipeline actually pushes (`okoobohjames/...`) instead of the original repo author's images, and had the pipeline's deploy stage `cd` into that fixed path and run `docker compose --env-file .env pull && up -d` against it. Verified the `jenkins` user could read the `.env` file and run compose there before wiring it into the pipeline (`sudo -u jenkins docker compose ... config`).
+
+## Pipeline result
+
+Extended the Task 7 `Jenkinsfile` with two new stages: cleaning up the local per-build image tags after a successful push (`docker rmi ... || true`, so failures don't fail the build), and deploying with `docker compose pull && up -d` against the persistent compose setup, followed by a verification stage that actually curls `/health` and the frontend root and fails the build (`curl -sf`) if either doesn't respond. Build #3 (triggered by the redelivered webhook after fixing the URL) completed `SUCCESS`: images built, pushed, local copies cleaned up, Compose recreated all three containers from the freshly pushed `:latest` images, and both health checks passed.
