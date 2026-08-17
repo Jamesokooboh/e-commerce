@@ -6,6 +6,7 @@ pipeline {
         ECR_REGISTRY    = '313951301623.dkr.ecr.us-east-1.amazonaws.com'
         AWS_REGION      = 'us-east-1'
         IMAGE_TAG       = "${env.BUILD_NUMBER}"
+        DEPLOY_DIR      = '/home/ubuntu/e-commerce'
     }
 
     stages {
@@ -69,6 +70,38 @@ pipeline {
                 sh '''
                     docker pull ${DOCKERHUB_USER}/ecommerce-backend:${IMAGE_TAG}
                     docker pull ${ECR_REGISTRY}/ecommerce-backend:${IMAGE_TAG}
+                '''
+            }
+        }
+
+        stage('Clean Up Local Images') {
+            steps {
+                sh '''
+                    docker rmi ${DOCKERHUB_USER}/ecommerce-backend:${IMAGE_TAG} || true
+                    docker rmi ${ECR_REGISTRY}/ecommerce-backend:${IMAGE_TAG} || true
+                    docker rmi ${DOCKERHUB_USER}/ecommerce-frontend:${IMAGE_TAG} || true
+                    docker rmi ${ECR_REGISTRY}/ecommerce-frontend:${IMAGE_TAG} || true
+                '''
+            }
+        }
+
+        stage('Deploy with Docker Compose') {
+            steps {
+                sh '''
+                    cd ${DEPLOY_DIR}
+                    docker compose --env-file .env pull
+                    docker compose --env-file .env up -d
+                    docker compose --env-file .env ps
+                '''
+            }
+        }
+
+        stage('Verify Deployment') {
+            steps {
+                sh '''
+                    sleep 10
+                    curl -sf http://localhost:5000/health
+                    curl -sf -o /dev/null -w "frontend HTTP %{http_code}\\n" http://localhost:3000/
                 '''
             }
         }
