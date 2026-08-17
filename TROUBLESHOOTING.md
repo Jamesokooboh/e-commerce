@@ -294,3 +294,35 @@ Rather than let the frontend's `:latest` image (built with `http://localhost:500
 - Backend → Database: `POST /signup` through the NodePort succeeded and the health endpoint reports `"database":"connected"`.
 - Frontend → Backend: frontend served correctly (`HTTP 200`) with the `:k8s` image's baked-in URL matching the backend's actual NodePort.
 - Scaling: `kubectl scale deployment backend --replicas=3` — Kubernetes created a third pod automatically, reaching `3/3 Ready` without any other changes.
+
+# Troubleshooting Log — Task 10 (Kubernetes with ConfigMaps, Secrets & Persistent Volume Storage)
+
+## Windows key-file permission issue (local, not server-side)
+
+**Symptom**: `ssh -i keys/miseacademy-dev.pem ...` failed with `Permission denied (publickey)` and Windows warned `Bad permissions... UNPROTECTED PRIVATE KEY FILE`, even after running `icacls /inheritance:r` and granting the current user explicit read access.
+
+**Root cause**: `icacls "<file>" /grant:r "<user>:(R)"` only adds/replaces that one principal's ACE — it doesn't remove other existing entries. A leftover group ACE (`OKOOBOH\CodexSandboxUsers`) was still present from before, and OpenSSH's Windows port rejects any key file with more than the owner's own access, regardless of what that extra access actually is.
+
+**Fix**: `icacls "<file>"` (no args) to actually list every ACE on the file, then `icacls "<file>" /remove "<extra-principal>"` to remove the specific leftover entry rather than assuming a grant alone would clean things up.
+
+## Migrating existing resources to a namespace
+
+Since Task 9's `backend`/`frontend`/`mongo` resources already existed in the `default` namespace, applying namespaced versions of the same manifests would have left two parallel sets of resources running side by side (Kubernetes namespaces are non-overlapping — a `Service` named `mongo` in `default` and one named `mongo` in `ecommerce` are entirely separate objects). Deleted the `default`-namespace Deployments/Services/Secret explicitly before applying the namespaced manifests, rather than letting old and new versions coexist and consume double the resources.
+
+## MongoDB: Deployment → StatefulSet with a PVC
+
+Replaced the plain `Deployment` + `emptyDir` from Task 9 with a `StatefulSet` using `volumeClaimTemplates`, which Kind auto-provisions against its default `standard` StorageClass (`rancher.io/local-path`) — no manual `PersistentVolume` needed, since the provisioner creates one per PVC on demand. The StatefulSet's Service is headless (`clusterIP: None`), which is the standard pattern — StatefulSet pods get stable network identities rather than being load-balanced like a Deployment's pods.
+
+## ConfigMap key naming caught early
+
+The ConfigMap stores `FRONTEND_URL`, but the backend code actually reads `process.env.REACT_APP_FRONTEND_URL` for its CORS check. Mapped the ConfigMap key explicitly per env var (`configMapKeyRef` with a different env var name) instead of using a blanket `envFrom`, which would have silently injected `FRONTEND_URL` as-is and left `REACT_APP_FRONTEND_URL` unset, breaking CORS the same way the Task 3 bug did.
+
+## Data persistence verified for real
+
+1. Signed up a test user through the NodePort — confirmed in MongoDB via `mongosh`.
+2. Fully deleted the `mongo-0` pod (`kubectl delete pod`, not just a restart) and waited for the StatefulSet controller to recreate it.
+3. Queried MongoDB again — the exact same document (same `_id`) was still there, proving the data lives in the PVC/PV, independent of the pod's lifecycle, the same guarantee proven for the standalone Docker volume in Task 4, now proven again at the Kubernetes layer.
+
+## Full-stack communication verified inside the namespace
+
+`POST /signup` through the frontend's NodePort succeeded end-to-end: frontend (serving via NodePort) → backend (2 replicas, ConfigMap/Secret-driven config) → MongoDB (StatefulSet, PVC-backed) → response confirmed and the document persisted.
