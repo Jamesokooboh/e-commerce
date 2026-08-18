@@ -443,3 +443,31 @@ Docker Hub already had `okoobohjames/ecommerce-backend:9` and `ecommerce-fronten
 - `kubectl get application ecommerce -n argocd` → `Synced` / `Healthy`.
 - `kubectl get pods -n ecommerce` → backend (`:9`, auto-updated) and frontend (`:k8s`, pinned) all `Running`, `1/1`.
 - `curl http://localhost:30080/` → `200`; `curl http://localhost:30050/products` → `200` (`GET /products`, not `/api/products` — the backend has no `/api` prefix).
+
+# Troubleshooting Log — Task 15 (CI/CD Integration: Jenkins → Docker Hub → ArgoCD Image Updater → GitOps)
+
+## Kind cluster survived an EC2 stop/start after all
+
+**Context**: the instance was stopped between Task 14 and Task 15 to save cost. Prior notes here (and in project memory) assumed a stop/start would wipe the Kind cluster, ArgoCD, and the whole `ecommerce` deployment, requiring a full rebuild.
+
+**What actually happened**: after `start-instances`, every Kind node container came back up on its own (Docker's restart policy), etcd's data was still on the container's filesystem since the container was only stopped, not removed, and every pod — ArgoCD, Image Updater, ingress-nginx, Metrics Server, the app itself — self-healed to `Running`/`Synced`/`Healthy` within about 2 minutes with zero manual steps. The earlier assumption was simply wrong (or was true of an older Kind/Docker Desktop combination this environment doesn't match). Corrected in project memory so future sessions check state first instead of blindly re-running the full install sequence.
+
+## Issue: Image Updater wasn't picking up newer backend tags after restart
+
+**Symptom**: Docker Hub already had `okoobohjames/ecommerce-backend` tags up through `:17` (Jenkins auto-builds via the GitHub webhook on every push, including Task 14's config-only commits), but the deployed backend stayed on `:9` and the updater's logs showed `images_considered=1, images_updated=0` every cycle with no explanation.
+
+**Root cause**: bumped the updater to `--loglevel debug` temporarily and found the real reason: `found 17 from 17 tags eligible for consideration ... Image 'okoobohjames/ecommerce-backend:9' already on latest allowed version`. The `latest`/`newest-build` strategy ranks tags by the *build timestamp baked into the image config*, not by when the tag was pushed to the registry. Tags `10`–`17` were all produced by Jenkins builds triggered by Task 14 pushes that never touched `backend/` or `frontend/` source (only `values.yaml`, `argocd/application.yaml`, `TROUBLESHOOTING.md`) — Docker's build cache reused the exact same layers each time, so those tags are byte-identical images with the same underlying creation timestamp as `:9`, just re-pushed under new tag numbers. The updater was correct: there was no real new build to roll out.
+
+**Fix**: not a bug to fix — a reminder that "a new tag exists" and "a new build exists" aren't the same thing when the build has caching. Reverted the debug logging once the cause was clear (`kubectl patch deployment argocd-image-updater ... args: ["run"]`).
+
+## Automatic image update verified with a real code change
+
+To prove the chain end-to-end (not just re-tag detection), made an actual source change: added a `build` field to `GET /health` (`backend/server.js`), sourced from a new `BUILD_NUMBER` build-arg (`backend/Dockerfile`), wired through the Jenkinsfile (`docker build --build-arg BUILD_NUMBER=${IMAGE_TAG} ...`). This both gives a genuine way to confirm which build is actually running (useful for exactly this kind of verification going forward) and, more importantly here, actually invalidates Docker's build cache.
+
+Result, fully automatic after the `git push`:
+1. GitHub webhook → Jenkins build `#18` → pushed `okoobohjames/ecommerce-backend:18` to Docker Hub.
+2. Image Updater's next poll cycle found it, wrote the Helm override to `.argocd-source-ecommerce.yaml`, committed and pushed it as itself.
+3. ArgoCD synced the new commit and rolled the backend Deployment to `:18`.
+4. `curl http://localhost:30050/health` → `{"status":"ok","database":"connected","build":"18"}` — the live container is genuinely running the new build, not a re-tag.
+
+`GitHub → Jenkins → Docker Image → Docker Hub → ArgoCD Image Updater → Helm/Git → ArgoCD → Kubernetes` confirmed working end-to-end with zero manual steps after the initial push.
