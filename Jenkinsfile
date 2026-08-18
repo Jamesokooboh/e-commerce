@@ -18,7 +18,7 @@ pipeline {
 
         stage('Build Backend Image') {
             steps {
-                sh "docker build -t ${DOCKERHUB_USER}/ecommerce-backend:${IMAGE_TAG} -t ${DOCKERHUB_USER}/ecommerce-backend:latest ./backend"
+                sh "docker build --build-arg BUILD_NUMBER=${IMAGE_TAG} -t ${DOCKERHUB_USER}/ecommerce-backend:${IMAGE_TAG} -t ${DOCKERHUB_USER}/ecommerce-backend:latest ./backend"
             }
         }
 

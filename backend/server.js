@@ -123,7 +123,8 @@ app.get("/health", (req, res) => {
     if (mongoose.connection.readyState === 1) {
         return res.status(200).json({
             status: "ok",
-            database: "connected"
+            database: "connected",
+            build: process.env.BUILD_NUMBER || "dev"
         })
     }
 
