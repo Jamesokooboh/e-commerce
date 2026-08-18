@@ -377,3 +377,69 @@ Converted the raw `k8s/*.yaml` manifests into `helm/ecommerce/` (`Chart.yaml`, `
 - `helm install` — all resources (Deployments, Services, StatefulSet+PVC, ConfigMap, Secret, HPA, Ingress) created successfully; PVC `Bound`; all pods `Running`.
 - Frontend and backend both reachable and functioning through the Ingress (`Host: ecommerce.local`), including a full `POST /api/signup` round-trip to MongoDB.
 - `helm upgrade` verified by bumping `frontend.replicaCount` from 2 to 3 via `--set` — release moved to revision 2 and Kubernetes scaled the Deployment accordingly, with no manual `kubectl` commands needed.
+
+# Troubleshooting Log — Task 14 (GitOps with ArgoCD + Image Updater)
+
+## Issue: ArgoCD's own CRDs failed to install
+
+**Symptom**: `kubectl apply -n argocd -f <official install.yaml>` applied everything except one CRD, failing with `The CustomResourceDefinition "applicationsets.argoproj.io" is invalid: metadata.annotations: Too long: must have at most 262144 bytes`.
+
+**Root cause**: `kubectl apply` stores the entire previous manifest in a `kubectl.kubernetes.io/last-applied-configuration` annotation for 3-way merge diffing. ArgoCD's CRDs are large enough that this annotation itself exceeds Kubernetes' 256KiB annotation size limit.
+
+**Fix**: Re-ran with `--server-side --force-conflicts`, which uses server-side apply (tracks field ownership instead of a client-side annotation) and has no such size limit. Used the same flags for the ArgoCD Image Updater install later for consistency.
+
+## Issue: ArgoCD couldn't clone the repo — "Repository not found"
+
+**Symptom**: The `Application` resource sat at `SYNC STATUS: Unknown` with a `ComparisonError` condition: `failed to list refs: authentication required: Repository not found.`
+
+**Root cause**: `Jamesokooboh/e-commerce` is a private repo; ArgoCD's repo-server was trying to clone it unauthenticated, and GitHub returns a 404 (not a 401) for unauthenticated requests against private repos, which is what produces the misleading "not found" message.
+
+**Fix**: Created a `Secret` in the `argocd` namespace labeled `argocd.argoproj.io/secret-type: repository`, with `type=git`, `url=https://github.com/Jamesokooboh/e-commerce.git`, `username=x-access-token`, and `password=<GitHub token>` (piped in directly from `gh auth token`, never typed or logged in plaintext, since token handling is a step best done by hand rather than scripted by an assistant). After a hard refresh (`kubectl patch application ecommerce -n argocd --type merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}'`), the Application moved to `Synced`/`Healthy`.
+
+## ArgoCD Application
+
+`argocd/application.yaml` defines the `ecommerce` Application: source is `helm/ecommerce` on `feature/James-Okooboh`, destination is the `ecommerce` namespace, with `syncPolicy.automated` (`prune: true`, `selfHeal: true`) so it reconciles without manual `kubectl apply`/`argocd sync` calls.
+
+## GitOps sync verified for real
+
+Bumped `frontend.replicaCount` from 2 to 3 in `values.yaml`, committed, and pushed to `feature/James-Okooboh` — deliberately did *not* trigger a manual refresh, to prove the polling loop itself works. ArgoCD detected the change on its own (~3 min default poll interval) and rolled out the third frontend replica with no intervention: `GitHub → ArgoCD → Kubernetes` confirmed end-to-end.
+
+## Issue: ArgoCD Image Updater ignored all the documented annotations
+
+**Symptom**: Installed the Image Updater from its `master` branch manifest. Pods came up healthy, but logs showed `No ImageUpdater CRs to process` and never looked at the `argocd-image-updater.argoproj.io/*` annotations already set on the `ecommerce` Application.
+
+**Root cause**: `master` (and the `v1.x` tags) turned out to be a ground-up rewrite that reads a new `ImageUpdater` custom resource instead of annotations on the `Application` — a breaking change not obvious from the repo's top-level layout (the classic `manifests/` directory was replaced with `config/`, and the `stable` branch this project's original tutorial referenced no longer exists at all, returning a plain 404). Checked the release tags directly (`gh api repos/argoproj-labs/argocd-image-updater/tags`) and found the annotation-based tool tops out at `v0.18.0` — versions `v1.0.0`+ are the CRD rewrite.
+
+**Fix**: Deleted the `v1.x` Deployment, ServiceAccount, Roles/RoleBindings, ClusterRoles/ClusterRoleBindings, and the `ImageUpdater` CRD it installed, then applied `https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/v0.18.0/manifests/install.yaml` instead. Its logs immediately showed `Starting image update cycle, considering 1 annotated application(s) for update`.
+
+## Image Updater configuration
+
+Annotations on `argocd/application.yaml`:
+- `image-list`: which image(s) to track and their alias (initially `backend`+`frontend`, later `backend` only — see below).
+- `<alias>.update-strategy: latest`: pick the most recently *built* matching tag, not the highest lexical/semver one (the app's tags are plain integers pushed by Jenkins, not semver).
+- `<alias>.allow-tags: regexp:^[0-9]+$`: restricts the updater to numeric tags only, so it never mistakes the mutable `latest`/`k8s` tags for a real version to roll forward to.
+- `<alias>.helm.image-tag`: maps the discovered tag to the chart's actual values path (`backend.image.tag` / `frontend.image.tag`).
+- `write-back-method: git`: commit the change back to the tracked branch instead of just mutating the live Argo `Application` object, so the desired state stays in git.
+
+## Automatic image update verified for real
+
+Docker Hub already had `okoobohjames/ecommerce-backend:9` and `ecommerce-frontend:9`, both newer builds than what was deployed (`latest`/`k8s`). Within one polling cycle, Image Updater:
+1. Detected both new tags.
+2. Wrote a Helm parameter override to `helm/ecommerce/.argocd-source-ecommerce.yaml`, committed as itself (`argocd-image-updater <noreply@argoproj.io>`) and pushed to `feature/James-Okooboh` — no human commit involved.
+3. ArgoCD picked up the new commit and rolled both Deployments to `:9`.
+
+`Code → Docker image → registry → Image Updater → Helm → ArgoCD → Kubernetes` confirmed end-to-end, with `images_updated=2, errors=0` in the updater's log.
+
+## Issue: auto-updated frontend silently broke frontend→backend calls
+
+**Symptom**: After the automatic update above, both Deployments reported `Running`/`1/1`, ArgoCD showed `Healthy`, and `curl` to both NodePorts returned `200` — everything *looked* fine from the infrastructure side.
+
+**Root cause**: `okoobohjames/ecommerce-frontend:9` is a generic build from the Jenkins pipeline; only the special `:k8s` tag was built with `--build-arg REACT_APP_BACKEND_URL=http://<EC2 IP>:30050` baked in for this Kind/NodePort setup (see the Task 9/known-follow-up note about that tag's IP going stale). Confirmed by `grep`-ing the built JS bundle inside the running pod (`kubectl exec ... grep -oE 'https?://...' main.*.js`): `:9` had `http://localhost:5000` hardcoded, which resolves to nothing from a real browser. A liveness/readiness probe or a plain `curl /` can't catch this — the container is healthy, the page loads, only an actual API call from a browser would fail.
+
+**Fix**: Removed `frontend` from the Image Updater's `image-list` annotation entirely (backend only) and reverted the `.argocd-source-ecommerce.yaml` override so `frontend.image.tag` falls back to the chart's `k8s` default. **Lesson**: an image auto-update policy has to match how each image is actually *built*, not just tagged — tracking "any new numeric tag" is safe for a build that's URL-agnostic (backend) and unsafe for one that bakes in environment-specific config at build time (this frontend). The frontend image's `:k8s` tag itself still carries the older Elastic-IP-migration follow-up noted in memory; auto-updating it wouldn't have fixed that, only masked it with an even more broken build.
+
+## Final verification
+
+- `kubectl get application ecommerce -n argocd` → `Synced` / `Healthy`.
+- `kubectl get pods -n ecommerce` → backend (`:9`, auto-updated) and frontend (`:k8s`, pinned) all `Running`, `1/1`.
+- `curl http://localhost:30080/` → `200`; `curl http://localhost:30050/products` → `200` (`GET /products`, not `/api/products` — the backend has no `/api` prefix).

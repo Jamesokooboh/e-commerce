@@ -1,0 +1,33 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ecommerce
+  namespace: argocd
+  annotations:
+    # frontend is intentionally NOT tracked: numbered frontend tags bake in
+    # http://localhost:5000 as the backend URL (only the :k8s tag has the
+    # correct NodePort URL baked in), so auto-updating it breaks the app.
+    # See TROUBLESHOOTING.md Task 14.
+    argocd-image-updater.argoproj.io/image-list: backend=okoobohjames/ecommerce-backend
+    argocd-image-updater.argoproj.io/backend.update-strategy: latest
+    argocd-image-updater.argoproj.io/backend.allow-tags: regexp:^[0-9]+$
+    argocd-image-updater.argoproj.io/backend.helm.image-tag: backend.image.tag
+    argocd-image-updater.argoproj.io/write-back-method: git
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Jamesokooboh/e-commerce.git
+    targetRevision: feature/James-Okooboh
+    path: helm/ecommerce
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ecommerce
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
