@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ecommerce
+  namespace: argocd
+  annotations:
+    argocd-image-updater.argoproj.io/image-list: backend=okoobohjames/ecommerce-backend,frontend=okoobohjames/ecommerce-frontend
+    argocd-image-updater.argoproj.io/backend.update-strategy: latest
+    argocd-image-updater.argoproj.io/backend.allow-tags: regexp:^[0-9]+$
+    argocd-image-updater.argoproj.io/backend.helm.image-tag: backend.image.tag
+    argocd-image-updater.argoproj.io/frontend.update-strategy: latest
+    argocd-image-updater.argoproj.io/frontend.allow-tags: regexp:^[0-9]+$
+    argocd-image-updater.argoproj.io/frontend.helm.image-tag: frontend.image.tag
+    argocd-image-updater.argoproj.io/write-back-method: git
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Jamesokooboh/e-commerce.git
+    targetRevision: feature/James-Okooboh
+    path: helm/ecommerce
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: ecommerce
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
