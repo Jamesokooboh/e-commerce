@@ -11,7 +11,9 @@ RUN npm install --omit=dev
 # Stage 2: Run the application
 FROM node:22-alpine AS runtime
 
+ARG BUILD_NUMBER=dev
 ENV NODE_ENV=production
+ENV BUILD_NUMBER=${BUILD_NUMBER}
 
 WORKDIR /app
 
