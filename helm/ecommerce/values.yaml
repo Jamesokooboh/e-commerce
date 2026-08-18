@@ -19,7 +19,7 @@ frontend:
   image:
     repository: okoobohjames/ecommerce-frontend
     tag: k8s
-  replicaCount: 2
+  replicaCount: 3
   containerPort: 8080
   servicePort: 80
   nodePort: 30080
