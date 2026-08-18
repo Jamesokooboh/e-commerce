@@ -351,3 +351,29 @@ The ConfigMap stores `FRONTEND_URL`, but the backend code actually reads `proces
 - Ran `ab -n 50000 -c 100 -t 120 http://localhost:30050/products`: 43,156 requests completed, **0 failed requests**, ~360 req/sec sustained.
 - Watched the HPA scale the backend Deployment from 2 → 5 replicas (its configured max) as CPU utilization climbed to 253% of the target during the load test.
 - After the load test ended, confirmed the HPA's default 5-minute stabilization window before scaling back down — after waiting it out, the deployment returned to 2 replicas with CPU back down to ~1%, and the two remaining pods had 0 restarts.
+
+# Troubleshooting Log — Task 13 (Helm Packaging & Ingress)
+
+## Kind cluster had to be recreated for Ingress support
+
+The existing Kind cluster (alive since Task 9) only had `extraPortMappings` for the app's own NodePorts (30050/30080), not the standard ports 80/443 that an Ingress controller needs, and no node carried the `ingress-ready` label ingress-nginx's Kind-specific manifest expects. Recreated the cluster with both: `extraPortMappings` for 80/443 (in addition to keeping 30050/30080) and a `kubeadmConfigPatches` entry labeling the control-plane node `ingress-ready=true`. This reset the MongoDB PVC (Kind's local-path-provisioner storage lives inside the node's container filesystem, not external to the cluster), which was fine since it only held demo signups. Metrics Server also had to be reinstalled for the same reason — anything that isn't in a manifest gets lost when the cluster itself is torn down.
+
+## Issue: Ingress returned "Connection reset by peer" on every request
+
+**Symptom**: The ingress-nginx controller pod was `Running`/`1/1 Ready`, its `Service` and the `Ingress` resource both looked correct, but every `curl` to `http://localhost/` (and to the frontend/backend via the Ingress host header) failed with `Connection reset by peer`.
+
+**Root cause**: `kubectl get pod -n ingress-nginx -o wide` showed the controller scheduled on `ecommerce-worker`, not `ecommerce-control-plane`. Since the container's `hostPort: 80`/`443` only actually forward to the host on the control-plane node (that's the only node with those `extraPortMappings` in the Kind config), a pod running the same hostPort spec on a *different* node has nothing listening on the EC2 host's port 80/443 — Docker forwards the connection into the control-plane container regardless of where the pod actually is, and since nothing inside that container is listening, the kernel sends a TCP reset. Checked the Deployment's `nodeSelector` and found it only required `kubernetes.io/os: linux` — the `ingress-ready` node-pinning that older/other versions of this manifest included wasn't present.
+
+**Fix**: Patched the `ingress-nginx-controller` Deployment's `nodeSelector` to require `ingress-ready: "true"` in addition to the OS selector, forcing it onto the correctly-configured control-plane node. After the rollout, both `/` (frontend) and `/api/health` (backend, via the Ingress's rewrite rule) returned `200`.
+
+## Helm chart structure
+
+Converted the raw `k8s/*.yaml` manifests into `helm/ecommerce/` (`Chart.yaml`, `values.yaml`, `templates/`), parameterizing image repository/tag, replica counts, ports, resource limits, HPA thresholds, and Ingress host/class. `secret.jwtSecret` defaults to a placeholder in `values.yaml` (never a real committed secret) and is overridden at install/upgrade time with `--set secret.jwtSecret=<generated-value>`, matching the pattern already used for the raw manifests' Kubernetes Secret.
+
+## Verification performed
+
+- `helm lint helm/ecommerce` — passed (only a cosmetic "icon is recommended" note).
+- `helm template` reviewed before installing, to catch templating mistakes without touching the cluster.
+- `helm install` — all resources (Deployments, Services, StatefulSet+PVC, ConfigMap, Secret, HPA, Ingress) created successfully; PVC `Bound`; all pods `Running`.
+- Frontend and backend both reachable and functioning through the Ingress (`Host: ecommerce.local`), including a full `POST /api/signup` round-trip to MongoDB.
+- `helm upgrade` verified by bumping `frontend.replicaCount` from 2 to 3 via `--set` — release moved to revision 2 and Kubernetes scaled the Deployment accordingly, with no manual `kubectl` commands needed.
