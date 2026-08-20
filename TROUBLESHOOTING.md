@@ -471,3 +471,77 @@ Result, fully automatic after the `git push`:
 4. `curl http://localhost:30050/health` → `{"status":"ok","database":"connected","build":"18"}` — the live container is genuinely running the new build, not a re-tag.
 
 `GitHub → Jenkins → Docker Image → Docker Hub → ArgoCD Image Updater → Helm/Git → ArgoCD → Kubernetes` confirmed working end-to-end with zero manual steps after the initial push.
+
+# Troubleshooting Log — Task 16 (Terraform: VPC, Bastion, Private Kubernetes, ALB)
+
+## Environment
+
+A brand-new environment, entirely separate from the `miseacademy-dev` instance and default VPC used in Tasks 1–15: a purpose-built VPC (`terraform/`) with 2 AZs × (1 public + 1 private subnet), a single shared NAT Gateway, a `t3.micro` bastion in a public subnet, and a private EC2 instance running a single-node Kind cluster, fronted by a manually-created ALB (per the task doc's explicit instruction not to use Terraform for the ALB). Reused the existing `helm/ecommerce` chart as-is for the app.
+
+## Issue: Ubuntu AMI data source returned no results
+
+**Symptom**: `terraform plan` failed with `Error: Your query returned no results` on the `aws_ami` data source.
+
+**Root cause**: the AMI name filter used the old `hvm-ssd-gp3` naming; current Canonical Ubuntu 22.04 AMIs in `us-east-1` are published under `ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*` (checked directly with `aws ec2 describe-images --owners 099720109477`).
+
+**Fix**: corrected the filter pattern in `terraform/ec2.tf`.
+
+## Issue: private EC2 instance rejected at apply time — not Free Tier eligible
+
+**Symptom**: `aws_instance.private` failed with `InvalidParameterCombination: The specified instance type is not eligible for Free Tier`, after everything else (VPC, subnets, NAT Gateway, bastion) had already been created successfully.
+
+**Root cause**: this AWS account is restricted to Free-Tier-eligible instance types only, and the originally-planned `t3.medium` isn't on that list. `aws ec2 describe-instance-types --filters Name=free-tier-eligible,Values=true` showed the actual eligible set for this account includes `c7i-flex.large` (2 vCPU / 4GB) — more than enough for a single-node Kind cluster.
+
+**Fix**: switched `private_instance_type` to `c7i-flex.large` and re-applied; only the one instance needed creating, everything else was already up.
+
+## SSH ProxyJump needed host-key trust on both hops
+
+**Symptom**: `ssh -J ubuntu@<bastion> ubuntu@<private-ip> ...` failed with `Host key verification failed`, even with `-o StrictHostKeyChecking=no` on the outer command.
+
+**Root cause**: `-o` flags on the outer `ssh` invocation don't automatically propagate to the implicit jump-host connection `-J` opens; each hop negotiates its own host key independently.
+
+**Fix**: used an explicit `-o ProxyCommand="ssh ... -o StrictHostKeyChecking=no -W %h:%p ubuntu@<bastion>"` instead of `-J`, which puts `StrictHostKeyChecking=no` on both the jump connection and the final one.
+
+## AWS CLI on Git Bash mangled a bare `/` argument
+
+**Symptom**: `aws elbv2 create-target-group --health-check-path /` failed with `Health check path 'C:/Program Files/Git/' must begin with a '/' character`.
+
+**Root cause**: Git Bash's MSYS layer rewrites bare-looking Unix paths in command arguments into Windows paths before the AWS CLI ever sees them — a Windows-specific quirk, not an AWS or Terraform issue.
+
+**Fix**: prefixed the command with `MSYS_NO_PATHCONV=1` to disable that rewriting for the one call.
+
+## Issue: frontend baked in an unreachable backend URL (again)
+
+**Symptom**: after deploying the app and creating the ALB (frontend only, on port 80), the frontend loaded fine through the ALB, but this is the exact same class of bug hit in Tasks 9/14/15 — checked for it deliberately this time before calling it done, rather than after a user reported it broken.
+
+**Root cause**: `frontend.image.tag` in `values.yaml` still points at the `:k8s` tag build, which has the *old* environment's Elastic IP (`44.194.117.44:30050`) baked in as `REACT_APP_BACKEND_URL` — meaningless in this brand-new VPC. Docker Hub also had no build with this environment's ALB DNS name baked in (it doesn't exist until the ALB is created, which happens after the image would need to be built).
+
+**Fix**: rather than pushing yet another tag to the shared Docker Hub repo for a throwaway environment, built the frontend image directly on the private instance (`docker build --build-arg REACT_APP_BACKEND_URL=http://<alb-dns>:5000 ...`, source `scp`'d over via the bastion) and loaded it straight into the Kind cluster with `kind load docker-image` — no registry, no credentials, nothing published outside this cluster. `helm upgrade --set frontend.image.repository=... --set frontend.image.tag=task16` switched the Deployment to it.
+
+## Issue: backend had no path through the ALB at all
+
+**Symptom**: the ALB's single target group only covered the frontend NodePort (30080); the backend NodePort (30050) had no route from outside the VPC, so even with the frontend's backend URL fixed, actual API calls would have nowhere to go.
+
+**Fix**: added a second target group (`ecommerce-task16-tg-backend`, port 30050, health check `/health`) and a second ALB listener on port 5000 forwarding to it, plus the matching security-group ingress rule. `curl http://<alb-dns>:5000/health` confirmed it end-to-end.
+
+## Issue: CORS rejected the new frontend origin
+
+**Symptom**: with both the frontend URL and backend routing fixed, a real cross-origin request (sent with an `Origin` header matching the ALB, the way a browser would) still needed checking — the backend's CORS middleware (`backend/server.js`) is configured with `origin: process.env.REACT_APP_FRONTEND_URL`, sourced from the Helm chart's `config.frontendUrl`, which was still set to the *old* environment's frontend URL.
+
+**Fix**: `helm upgrade --set config.frontendUrl=http://<alb-dns>` plus `kubectl rollout restart deployment/backend` (a ConfigMap value change alone doesn't restart existing pods). Verified with `curl -H "Origin: http://<alb-dns>" ...` and confirmed `Access-Control-Allow-Origin` echoed back the correct origin.
+
+## Terraform state drift from a manual mid-task fix
+
+The backend ALB listener above required opening port 5000 on the ALB's security group, done via `aws ec2 authorize-security-group-ingress` in the moment rather than round-tripping through Terraform. Added the equivalent `ingress` block to `aws_security_group.alb` in `terraform/ec2.tf` afterward and re-ran `terraform plan`/`apply` — it correctly reconciled the drift (updated the existing security group in place, not a resource replacement) and a follow-up `terraform plan` showed a clean "No changes."
+
+## Unrelated: local working tree had a stray `frontend/` deletion
+
+Discovered mid-task that `frontend/` showed as fully deleted in `git status` on this machine, with an untracked byte-identical duplicate sitting at `docs/frontend/` (dated before this session — not something this session did). Confirmed via `git diff HEAD -- frontend/` and a content diff against the duplicate that nothing was actually lost (GitHub's `origin` was never affected, since this was a local-only uncommitted change, and Jenkins builds from `origin` directly, not this checkout). Restored with `git restore frontend/`, then removed the now-redundant `docs/frontend/` duplicate.
+
+## Final verification
+
+- `terraform plan` → clean, no drift, after every manual/CLI-driven change was folded back into the `.tf` files.
+- Private instance confirmed to have **no direct public reachability**: `curl` from outside the VPC to `10.0.10.22:30080` timed out, while the same request through the ALB returned `200` — proving the private subnet routing is real, not just labeled.
+- Both ALB target groups (`frontend` on 30080, `backend` on 30050) report `healthy`.
+- `curl http://<alb-dns>/` returns the real app HTML (not a placeholder), and the served JS bundle was `grep`'d directly to confirm it contains the *correct* backend URL for this environment.
+- `curl -H "Origin: http://<alb-dns>" http://<alb-dns>:5000/products` returns `200` with a matching `Access-Control-Allow-Origin` header — a genuine cross-origin request succeeds, not just a same-origin health check.
