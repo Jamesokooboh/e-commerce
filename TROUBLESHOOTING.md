@@ -545,3 +545,51 @@ Discovered mid-task that `frontend/` showed as fully deleted in `git status` on 
 - Both ALB target groups (`frontend` on 30080, `backend` on 30050) report `healthy`.
 - `curl http://<alb-dns>/` returns the real app HTML (not a placeholder), and the served JS bundle was `grep`'d directly to confirm it contains the *correct* backend URL for this environment.
 - `curl -H "Origin: http://<alb-dns>" http://<alb-dns>:5000/products` returns `200` with a matching `Access-Control-Allow-Origin` header — a genuine cross-origin request succeeds, not just a same-origin health check.
+
+# Troubleshooting Log — Task 17 (Blue/Green Deployment & Rollback with Kubernetes and Terraform)
+
+## Closing a debt from Task 16: runtime config injection for the frontend
+
+Task 16's retrospective flagged that the frontend baking `REACT_APP_BACKEND_URL` in at Docker build time was the root cause behind the same class of bug recurring in Tasks 9, 14, 15, and 16 — each fix was operational (rebuild, retag, redeploy) rather than structural. Fixed it for real this time instead of deferring again:
+
+- `frontend/Dockerfile` no longer takes `REACT_APP_BACKEND_URL` as a build arg.
+- `frontend/docker-entrypoint.d/20-env-config.sh` runs automatically at container start (the official nginx image convention `nginxinc/nginx-unprivileged` also honors) and `sed`-substitutes a `BACKEND_URL` container env var into `frontend/public/env.template.js` → `env.js`, served as a plain static file.
+- `frontend/public/index.html` loads `env.js` before the React bundle.
+- All 14 call sites across 8 components now import `BACKEND_URL` from a new `frontend/src/config.js` (`window.__ENV__.BACKEND_URL`) instead of reading `process.env.REACT_APP_BACKEND_URL` — verified with a `grep` for zero remaining matches.
+- `helm/ecommerce` gained `config.backendUrl`, wired to a `BACKEND_URL` env var on the frontend container, mirroring how the backend already gets `FRONTEND_URL` for CORS.
+
+**Issue: `RUN chmod +x` failed with "Operation not permitted"** — `nginxinc/nginx-unprivileged` sets its own non-root default user in the base image itself, before my Dockerfile's own (redundant-looking) `USER 101` line ever executes, so the `COPY`/`RUN` steps for the entrypoint script were already running unprivileged. **Fix**: added an explicit `USER root` at the top of the runtime stage, before any commands that need root, with `USER 101` still switching back to unprivileged at the end for the actual container runtime.
+
+**Verified for real, not just by reading the Dockerfile**: one frontend image, built once, deployed to two different namespaces with two different `BACKEND_URL` values via Helm, and `curl <host>/env.js` on each confirmed the correct value was actually substituted — not the `__BACKEND_URL__` placeholder (would mean the `sed` silently failed) and not the dev-default baked into the image (would mean the entrypoint script never ran at all).
+
+## Issue: green's NodePorts were completely unreachable from the host
+
+**Symptom**: after deploying `green` with different NodePorts (`30051`/`30081`) than `blue` (`30050`/`30080`), `curl localhost:30081` on the private instance itself returned nothing — not even a connection refused, just `curl: (7) Failed to connect`.
+
+**Root cause**: Kind maps host ports into the control-plane container only via `extraPortMappings` set at `kind create cluster` time, and `terraform/user_data.sh`'s `kind-config.yaml` only listed the original two ports (`30050`/`30080`) from Task 16. Extending `terraform/variables.tf`'s `app_node_ports` (which drives the *security group* rules) had no effect on Kind's own port forwarding — these are two separate, unrelated mechanisms that happen to need the same numbers kept in sync manually. Green's Kubernetes Services existed and were correctly configured; they were just never reachable from outside the Kind container at all.
+
+**Fix**: updated `user_data.sh`'s `kind-config.yaml` to include all four ports, then — since Kind's port mappings can't be changed on a running cluster — `kind delete cluster` + `kind create cluster` with the corrected config, and redeployed both `blue` and `green` from scratch. Confirmed via `curl localhost:30081` going from `000` to `200` after the fix.
+
+## Finding: an ALB target group in a group not attached to any listener is never health-checked at all
+
+While green's backend was still deliberately broken, checking its target groups' health expecting `unhealthy` instead returned `"State": "unused", "Reason": "Target.NotInUse"` — for *both* the broken backend and the actually-healthy frontend. An ALB simply doesn't run health checks against a target group until it's referenced by a listener's default action or a rule; being registered as a target isn't enough. This corrected the plan mid-task: "test green independently before switching," as the doc puts it, has to mean testing directly against green's own NodePorts, not via ALB target health, since the ALB is structurally incapable of observing an unattached target group's state.
+
+## Issue: the first two attempts to break green's backend for the rollback test didn't actually break anything
+
+Wanted a second, different failure mode (not another bad image tag) to test the rollback path specifically. Two attempts before finding one that worked:
+
+1. `--set mongo.port=27018` — the chart's `mongo-statefulset.yaml` template uses `.Values.mongo.port` for **both** Mongo's own listening port and the backend's `MONGO_URI` construction, so overriding it moved both sides together and they stayed connected. `/health` kept reporting `"database":"connected"` throughout.
+2. `kubectl set env deployment/backend -n green MONGO_URI=mongodb://nonexistent-mongo-host:27017/...` — this genuinely broke the *new* pod, but the Deployment's `RollingUpdate` strategy kept the old, still-healthy pod serving traffic the entire time (a pod that fails its own readiness probe never becomes a Service endpoint, so the Service/NodePort only ever routed to the one pod that still worked). `/health` still returned `200` — the rolling update was silently masking the failure by design, which is usually exactly what you want, but defeated the point of this specific test.
+
+**Fix**: found the old ReplicaSet was still holding its full `replicas: 1` (Kubernetes never scaled it down, since the new ReplicaSet never passed readiness — that's how `RollingUpdate` is supposed to behave). Scaled it to `0` directly (`kubectl scale replicaset <old-rs> --replicas=0`) to force a genuine full outage. Confirmed via the health endpoint going from `200` to `000`, and the ALB target group correctly flipping to `unhealthy`/`Target.FailedHealthChecks` shortly after — this is the actual "detect the failure" moment of the workflow, driven by a real backend outage rather than a synthetic one.
+
+## Full workflow verified end-to-end
+
+1. `blue` deployed, verified fully working through the ALB (frontend `200`, backend health `200`, real cross-origin request with matching `Access-Control-Allow-Origin`).
+2. `green` deployed with a broken image tag — confirmed `ImagePullBackOff`, confirmed switching now would have served a broken app (backend not reachable at all, even directly).
+3. `green`'s tag fixed, redeployed, verified independently healthy (its own NodePorts, its own `env.js`) *before* touching the ALB, per the doc's own ordering.
+4. Both ALB listeners (`80`→frontend, `5000`→backend) switched from blue's target groups to green's via `aws elbv2 modify-listener` — confirmed traffic actually moved with a real cross-origin request through the switched listener, not just a config check.
+5. `green` broken a second way (bad Mongo connectivity, forced to a genuine full outage as above) — ALB correctly detected it as `unhealthy`.
+6. Both listeners switched back to blue — confirmed blue fully functional again post-rollback (one transient `502` immediately at the switch, self-resolved on retry — ALB listener config changes take a moment to propagate across its underlying nodes, worth expecting on any live switch).
+
+`Users → ALB → Blue → Version 1` → switch → `Users → ALB → Green → Version 2` → simulated failure → detected via ALB → rollback → `Users → ALB → Blue → Version 1` confirmed working, matching the task doc's expected workflow exactly.
