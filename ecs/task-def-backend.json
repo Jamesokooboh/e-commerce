@@ -1,0 +1,30 @@
+{
+  "family": "ecommerce-backend",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::313951301623:role/ecsTaskExecutionRole",
+  "containerDefinitions": [
+    {
+      "name": "backend",
+      "image": "313951301623.dkr.ecr.us-east-1.amazonaws.com/ecommerce-backend:latest",
+      "portMappings": [{ "containerPort": 5000, "protocol": "tcp" }],
+      "environment": [
+        { "name": "MONGO_URI", "value": "mongodb://mongo.ecommerce.local:27017/ecommerce" },
+        { "name": "REACT_APP_FRONTEND_URL", "value": "http://ecs-ecommerce-alb-1146435757.us-east-1.elb.amazonaws.com" }
+      ],
+      "secrets": [
+        { "name": "JWT_SECRET", "valueFrom": "arn:aws:ssm:us-east-1:313951301623:parameter/ecommerce/ecs/jwt-secret" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/ecommerce",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "backend"
+        }
+      }
+    }
+  ]
+}

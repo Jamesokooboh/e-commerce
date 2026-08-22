@@ -660,3 +660,38 @@ Rather than hand-building dashboards from scratch, imported two well-established
 ## Reproducibility
 
 All of the above is captured as code in `monitoring/` (`cloudwatch-agent-config.json`, `collect-k8s-logs.sh`, `grafana-dashboard-ecommerce-app.json`, `setup.sh` running the SNS/alarm/agent/Prometheus commands end-to-end) rather than left as one-off CLI history — the network interface name in the CloudWatch config and the `host` dimension in `setup.sh`'s alarms are instance-specific and need checking against whatever instance this is re-run on.
+
+# Troubleshooting Log — Task 19 (Deploying Dockerized Applications to AWS ECS)
+
+## Environment
+
+Fargate launch type (no EC2 instances to manage), default VPC's existing public subnets (no custom networking needed — this task's scope is ECS/ECR/ALB, not VPC design). Reused the existing ECR repos and images the Jenkins pipeline already pushes to (`ecommerce-backend:latest`, `ecommerce-frontend:171` — the latter built *after* Task 17's runtime-config-injection merge, making this the first real test of that fix in a genuinely new environment).
+
+## The task doc doesn't mention a database at all — had to design around it anyway
+
+Steps 1–11 cover CLI/ECR/cluster/task-definitions/services/ALB/health-checks/testing for backend and frontend only; nothing about MongoDB. The app can't run without it. Rather than skip it or reach for a managed database service (out of scope, and a real ongoing cost), ran Mongo as a third Fargate task in the same cluster with **no persistent storage** — appropriate here since this task is about deployment mechanics, not data durability (already proven separately in Task 10's StatefulSet+PVC work).
+
+Fargate tasks have no stable IP or hostname by default, so the backend needs a way to find Mongo that survives task replacement. Used **AWS Cloud Map** (`aws servicediscovery create-private-dns-namespace` + `create-service`) to give the Mongo service a private DNS name (`mongo.ecommerce.local`) inside the VPC, registered automatically via `--service-registries` on `aws ecs create-service`. The backend's `MONGO_URI` just points at that DNS name — no IP tracking needed.
+
+## Nothing needed for ECS existed yet — two IAM setups from scratch
+
+Neither `ecsTaskExecutionRole` nor an ECS service-linked role existed on this account (18 prior tasks never touched ECS). `aws ecs create-cluster` failed outright with `Unable to assume the service linked role` until confirming the account-level `AWSServiceRoleForECS` role existed (it did — a stale/from-elsewhere role, `create-service-linked-role` just confirmed it rather than needing to create it). `ecsTaskExecutionRole` itself needed creating explicitly (trust policy for `ecs-tasks.amazonaws.com`, `AmazonECSTaskExecutionRolePolicy` attached) — this is the role Fargate assumes to pull from ECR and write to CloudWatch Logs, distinct from any role the *application* runs as.
+
+## JWT secret via SSM Parameter Store, not a plaintext task definition value
+
+Matching how secrets have been handled everywhere else in this project (Helm's `--set secret.jwtSecret`, never committed): stored the JWT secret as a `SecureString` in SSM Parameter Store, referenced from the backend task definition's `secrets` block (`valueFrom` the parameter ARN) rather than its `environment` block. This needed one more IAM step the base execution role policy doesn't include: `ssm:GetParameters` + `kms:Decrypt` added as an inline policy on `ecsTaskExecutionRole` — without it, tasks fail to even start with a resource-resolution error, not a runtime one.
+
+## Issue: backend service stuck cycling tasks, running count above desired count
+
+**Symptom**: `aws ecs describe-services` showed `backend` at `runningCount: 4, desiredCount: 2, rolloutState: IN_PROGRESS` for several minutes — not the "briefly over desired during a normal rollout" pattern, genuinely stuck.
+
+**Root cause**: `aws ecs describe-tasks` on a stopped task showed the real reason directly: `Task failed ELB health checks in (target-group ...backend-tg)`. Backend logs showed a stream of `GET /health 503` with a Mongoose `TopologyDescription: Unknown` for `mongo.ecommerce.local:27017` underneath — the backend genuinely couldn't reach Mongo, not a startup-timing false positive. Checked the shared Fargate task security group's rules directly (`describe-security-groups`) and found it only had ingress for `8080`/`5000` from the ALB security group — **nothing allowing port `27017` between tasks at all**. Mongo's own task was healthy and running; nothing else could reach it.
+
+**Fix**: `aws ec2 authorize-security-group-ingress` adding a self-referencing rule (the task security group, port `27017`, source = itself) so any task in that security group can reach any other task in it on Mongo's port. Didn't need to force a redeploy — Mongoose's own reconnect loop picked up the now-open connection within about a minute, and ECS's own health-check-driven task replacement cycle settled back to `2/2 COMPLETED` on its own once the underlying tasks started passing.
+
+## Verified for real, closing the loop on the Task 17 fix
+
+- `curl http://<alb-dns>/env.js` → `window.__ENV__ = { BACKEND_URL: "http://<alb-dns>:5000" }` — the exact same `frontend:171` image already running in the Task 17/18 Kind cluster now configures itself correctly for a completely different environment (ECS/Fargate, different DNS name, different networking model entirely) via nothing but a container `environment` variable. No rebuild, no new tag, no per-environment image. This is the actual payoff of fixing that bug at the class level back in Task 17 instead of patching it again.
+- `curl http://<alb-dns>:5000/health` → `{"status":"ok","database":"connected",...}` — real Mongo connectivity through Cloud Map, not assumed from the service being "ACTIVE."
+- `curl -H "Origin: http://<alb-dns>" http://<alb-dns>:5000/products` → `200` with a matching `Access-Control-Allow-Origin` header — a genuine cross-origin request succeeds end-to-end.
+- All three ECS services (`mongo`, `backend`, `frontend`) confirmed at `runningCount == desiredCount`, `rolloutState: COMPLETED`, and both ALB target groups fully `healthy`.
