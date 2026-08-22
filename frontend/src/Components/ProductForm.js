@@ -1,6 +1,7 @@
 import { useState } from "react"
 import Alert from "./Alert"
 import { useAlert } from "../AlertContext"
+import { BACKEND_URL } from "../config"
 export default function ProductForm() {
     const [name, setName] = useState("")
     const [price, setPrice] = useState("")
@@ -14,7 +15,7 @@ export default function ProductForm() {
     formData.append("image", image)
     const handleSubmit = async (e) => {
         e.preventDefault()
-        await fetch(`${process.env.REACT_APP_BACKEND_URL}/products`, {
+        await fetch(`${BACKEND_URL}/products`, {
             method: "POST",
             credentials: "include",
             body: formData

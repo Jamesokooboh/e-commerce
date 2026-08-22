@@ -3,12 +3,13 @@ import { useNavigate } from "react-router"
 import Alert from "./Alert"
 import Search from "./Search"
 import { useAlert } from "../AlertContext"
+import { BACKEND_URL } from "../config"
 export default function ProductList() {
     const [products, setProducts] = useState([])
     const { showAlert } = useAlert()
     const navigate = useNavigate()
     useEffect(() => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/products`, {
+        fetch(`${BACKEND_URL}/products`, {
             method: "GET",
             credentials: "include",
             headers: {
@@ -23,7 +24,7 @@ export default function ProductList() {
         })
     }, [])
     const addToCart = (product) => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/cart`, {
+        fetch(`${BACKEND_URL}/cart`, {
             method: "POST",
             credentials: "include",
             headers: {

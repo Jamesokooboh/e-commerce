@@ -3,6 +3,7 @@ import { useAlert } from "../AlertContext"
 import { SearchContext } from "../SearchContext"
 import { useNavigate } from "react-router-dom"
 import { useState, useContext } from "react"
+import { BACKEND_URL } from "../config"
 export default function Search() {
     const [input, setInput] = useState("")
     const { setRes } = useContext(SearchContext)
@@ -13,7 +14,7 @@ export default function Search() {
         if (input === "" || input === null) {
             showAlert(["Error", "Cannot search for an empty input"])
         } else {
-            fetch(`${process.env.REACT_APP_BACKEND_URL}/searchProducts`, {
+            fetch(`${BACKEND_URL}/searchProducts`, {
                 method: "POST",
                 credentials: "include",
                 headers: {

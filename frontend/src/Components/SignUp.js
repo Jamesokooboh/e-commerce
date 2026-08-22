@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useAlert } from "../AlertContext"
 import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google"
+import { BACKEND_URL } from "../config"
 export default function Register() {
     const [name, setName] = useState("")
     const [email, setEmail] = useState("")
@@ -15,7 +16,7 @@ export default function Register() {
         else if (password.length < 8)
             showAlert("Error", "Please enter a strong password")
         else {
-            fetch(`${process.env.REACT_APP_BACKEND_URL}/signup`, {
+            fetch(`${BACKEND_URL}/signup`, {
                 method: "POST",
                 credentials: "include",
                 headers: {
@@ -74,7 +75,7 @@ export default function Register() {
                             showAlert("Error", "An error occurred while signing you up through Google. Please try again later.")
                             return
                         } else {
-                            fetch(`${process.env.REACT_APP_BACKEND_URL}/oauth`, {
+                            fetch(`${BACKEND_URL}/oauth`, {
                                 method: "POST",
                                 credentials: "include",
                                 headers: {

@@ -49,11 +49,11 @@ variable "bastion_instance_type" {
 
 variable "private_instance_type" {
   type    = string
-  default = "c7i-flex.large"
+  default = "m7i-flex.large"
 }
 
 variable "app_node_ports" {
-  description = "NodePorts the Kind cluster exposes for the app (frontend, backend)"
+  description = "NodePorts the Kind cluster exposes for the app (blue + green frontend/backend)"
   type        = list(number)
-  default     = [30080, 30050]
+  default     = [30080, 30050, 30081, 30051]
 }

@@ -1,11 +1,12 @@
 import Alert from "./Alert"
 import { useEffect, useState } from "react"
 import { useAlert } from "../AlertContext"
+import { BACKEND_URL } from "../config"
 export default function Cart() {
     const [cart, setCart] = useState([])
     const { showAlert } = useAlert()
     useEffect(() => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/cart`, {
+        fetch(`${BACKEND_URL}/cart`, {
             method: "GET",
             credentials: "include",
             headers: {
@@ -25,7 +26,7 @@ export default function Cart() {
         })
     }, [])
     const removeItem = (item) => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/cart`, {
+        fetch(`${BACKEND_URL}/cart`, {
             method: "DELETE",
             credentials: "include",
             headers: {

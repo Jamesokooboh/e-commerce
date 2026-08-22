@@ -1,6 +1,7 @@
 import { useState } from "react"
 import Alert from "./Alert"
 import { useAlert } from "../AlertContext"
+import { BACKEND_URL } from "../config"
 export default function Authorize(){
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
@@ -13,7 +14,7 @@ export default function Authorize(){
         else if (password.length < 8)
             showAlert("Error", "Please enter a strong password")
         else {
-            fetch(`${process.env.REACT_APP_BACKEND_URL}/login`, {
+            fetch(`${BACKEND_URL}/login`, {
                 method: "POST",
                 credentials: "include",
                 headers: {

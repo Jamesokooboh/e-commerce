@@ -2,11 +2,12 @@ import { SearchContext } from "../SearchContext"
 import { useContext } from "react"
 import Alert from "./Alert"
 import { useAlert } from "../AlertContext"
+import { BACKEND_URL } from "../config"
 export default function Result() {
     const { showAlert } = useAlert()
     const { res } = useContext(SearchContext)
         const addToCart = (product) => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/cart`, {
+        fetch(`${BACKEND_URL}/cart`, {
             method: "POST",
             credentials: "include",
             headers: {

@@ -40,6 +40,7 @@ mongo:
 config:
   mongoDatabase: ecommerce
   frontendUrl: "http://44.194.117.44:3000"
+  backendUrl: "http://44.194.117.44:5000"
 
 # Override at install time: --set secret.jwtSecret=<value>, never commit a real secret here.
 secret:
