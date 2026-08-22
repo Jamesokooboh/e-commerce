@@ -593,3 +593,70 @@ Wanted a second, different failure mode (not another bad image tag) to test the 
 6. Both listeners switched back to blue — confirmed blue fully functional again post-rollback (one transient `502` immediately at the switch, self-resolved on retry — ALB listener config changes take a moment to propagate across its underlying nodes, worth expecting on any live switch).
 
 `Users → ALB → Blue → Version 1` → switch → `Users → ALB → Green → Version 2` → simulated failure → detected via ALB → rollback → `Users → ALB → Blue → Version 1` confirmed working, matching the task doc's expected workflow exactly.
+
+# Troubleshooting Log — Task 18 (Monitoring Kubernetes Applications with CloudWatch, Prometheus & Grafana)
+
+## Environment
+
+Reused `miseacademy-dev` (the long-running instance from Tasks 1–15, default VPC) rather than a new one, since the task doc just asks for "an EC2 instance using the default VPC" and this one already had Docker/Kind set up. Everything self-healed on restart as expected from earlier findings — except SSH itself, see below.
+
+## Issue: SSH timed out on restart, looked like a boot delay, wasn't
+
+**Symptom**: `ssh ... ubuntu@44.194.117.44` timed out repeatedly after `aws ec2 start-instances`, even though `describe-instance-status` reported both system and instance status checks as `ok`.
+
+**Root cause**: the instance's security group only allowed SSH from a specific `/32` CIDR pinned to whatever the operator's IP was during an *earlier* session — which had since changed. AWS's own health checks were correctly green; the block was a stale allow-list entry, not a boot issue.
+
+**Fix**: `aws ec2 revoke-security-group-ingress` the old CIDR, `authorize-security-group-ingress` the current one (`curl -s https://checkip.amazonaws.com`). Worth checking this before assuming a "running" instance with passing health checks that still won't SSH is just slow to boot.
+
+## No IAM role was ever attached to this instance
+
+The CloudWatch agent needs permission to push metrics/logs, and nothing had been set up for that across 17 prior tasks (never needed until now). Created `ecommerce-cloudwatch-agent-role` (trust policy for `ec2.amazonaws.com`) with the AWS-managed `CloudWatchAgentServerPolicy`, wrapped it in an instance profile, and attached it to the running instance with `aws ec2 associate-iam-instance-profile` — this works without a reboot.
+
+## Issue: CloudWatch agent couldn't read `/var/log/syslog`
+
+**Symptom**: the agent's own log showed a continuous stream of `Failed to tail file /var/log/syslog with error: open /var/log/syslog: permission denied`, and the `/ecommerce/system` log group never got created at all.
+
+**Root cause**: the agent config sets `run_as_user: cwagent`, and `/var/log/syslog` is only group-readable (`syslog:adm`, mode `640`). The `cwagent` user wasn't in the `adm` group.
+
+**Fix**: `sudo usermod -aG adm cwagent`, restart the agent.
+
+## Issue: network metrics never appeared
+
+The agent config's `net` block listed `eth0` as the interface to collect from — copied from generic documentation without checking this instance. `ip -brief addr` showed the actual interface is `ens5` (standard on newer AWS Nitro-based instance types). Fixed by editing the interface name and re-applying the config.
+
+## Reaching Kubernetes pod logs from CloudWatch doesn't work the way the docs imply, for a Kind cluster
+
+CloudWatch's file-based log collection is a host-level agent tailing plain files. On EKS or ECS, Container Insights bridges that gap for you; on a **Kind** cluster, the pods run inside containerd nested inside the Kind node's own Docker container — their logs never land on the EC2 host's filesystem at all, so there's nothing for the agent to tail directly.
+
+**Fix**: a small script (`monitoring/collect-k8s-logs.sh`) runs every minute via cron, does `kubectl logs --since=70s` across every pod in the `ecommerce` namespace, and appends the output (prefixed per-pod) to a plain file the CloudWatch agent already knows how to watch. Not as instant as a real streaming log driver, but genuinely reliable and needed no extra components (no Fluent Bit, no CloudWatch Container Insights, neither of which actually apply to a self-managed Kind cluster).
+
+## Issue: `helm install --wait` timed out installing kube-prometheus-stack, and the actual reason was a full disk
+
+**Symptom**: `helm install ... --wait --timeout 5m` failed with `context deadline exceeded`. `kubectl get pods -n monitoring` showed `grafana` and `prometheus` stuck in `ImagePullBackOff` while `node-exporter`, `kube-state-metrics`, and the operator itself all came up fine.
+
+**Root cause**: `kubectl describe pod` on the stuck pods showed the real error underneath: `failed to pull and unpack image ...: no space left on device`. The Kind cluster was over 4 days old (survived several stop/starts across Tasks 15–17) and had accumulated enough image layers from dozens of different task deployments that the host's 20GB root EBS volume was at 100% (`df -h /` — `20G 20G 46M`). `docker system df` only showed ~7GB tracked, well under the actual 20GB used, which was the first clue this wasn't a normal "just prune images" situation — the gap was mostly untracked overlay2 diff layers, not something a targeted cleanup command would find by category.
+
+**Fix**: `docker system prune -af` freed 4.2GB (down to 80% usage, 3.9GB free) — enough headroom to unblock the pulls. Deleted the two stuck pods so Kubernetes recreated them against the now-available space; both came up healthy within a minute. Worth checking disk space *before* investigating a stuck deployment on a cluster that's been alive for several days across many tasks, rather than assuming it's a networking or registry problem.
+
+## Grafana dashboards
+
+Rather than hand-building dashboards from scratch, imported two well-established community dashboards via Grafana's own import API (fetching the JSON from `grafana.com`'s public download endpoint and POSTing it to `/api/dashboards/import` with the local Prometheus datasource substituted in): **Node Exporter Full** (ID `1860`) for infrastructure metrics, and **Kubernetes cluster monitoring via Prometheus** (ID `315`) for cluster/pod-level metrics. Built one small custom dashboard (`monitoring/grafana-dashboard-ecommerce-app.json`) for what those two don't cover — backend/frontend container CPU, memory, pod status, and restart rate scoped specifically to the `ecommerce` namespace.
+
+## Verified with real load and a real application error, not synthetic checks
+
+- `ab -n 20000 -c 50 -t 90` against the backend: 40,148 requests completed, **0 failed**, ~446 req/sec sustained. Confirmed the load actually registered in the monitoring pipeline (not just that `ab` ran) by querying Prometheus directly for `container_cpu_usage_seconds_total` on the backend pods during the test window — non-zero, moving.
+- Deliberately triggered a real application error rather than assuming the alarm would work: `GET /not-a-valid-object-id` hits the backend's `/:id` catch-all route (the same route implicated in Task 1's very first bug, still present) and throws an unhandled Mongoose `BSONError` when it tries to cast the string to an ObjectId — a genuine, unhandled error, not a mocked one.
+- **Notable finding**: the pods showed **zero restarts** throughout — the app's process-level safety net (added back in Task 2) caught the error without crashing the container. That's good application behavior, but it also means pod-restart-count alone would never have surfaced this error to anyone watching dashboards. The log-pattern-based CloudWatch alarm (`ecommerce-app-errors`, a metric filter on `/ecommerce/k8s/pods` matching `ERROR`/`Exception`/`Failed`/5xx) caught it and flipped to `ALARM` within a minute — a concrete demonstration of why log-based alerting matters even for an app that degrades gracefully.
+- All three alarms confirmed in genuinely correct states afterward: `ecommerce-high-cpu` and `ecommerce-high-memory` settled to `OK` (load wasn't sustained/heavy enough to cross 70%/80%), `ecommerce-app-errors` in `ALARM` (the real error above).
+
+## Issue: the CPU alarm silently never left `INSUFFICIENT_DATA`
+
+**Symptom**: `ecommerce-high-memory` (created with the same pattern, same dimension) settled into `OK` within a couple of minutes; `ecommerce-high-cpu` stayed on `INSUFFICIENT_DATA` indefinitely — worth checking rather than assuming it just needed more time, since `describe-alarms`'s `StateReason` for it never advanced past "Unchecked: Initial alarm creation" even minutes later, which memory's `OK` status disproved as a simple timing issue.
+
+**Root cause**: `aws cloudwatch list-metrics` on `cpu_usage_user` showed the real, published metric carries **two** dimensions — `host` and `cpu=cpu-total` (from the agent config's `totalcpu: true`) — but the alarm was only created with the `host` dimension. CloudWatch alarms require an **exact** dimension match, not a subset; a metric published with an extra dimension the alarm doesn't specify simply never matches. `mem_used_percent` only ever carries the single `host` dimension, which is why that alarm worked immediately with the same approach.
+
+**Fix**: recreated the alarm with both dimensions (`Name=host,Value=<host> Name=cpu,Value=cpu-total`). Settled into a real `OK` state within the next evaluation period. Worth checking `list-metrics`' actual dimension set for a new custom-namespace metric before wiring an alarm to it, rather than assuming the dimensions used in a `put-metric-alarm` call will simply "match well enough."
+
+## Reproducibility
+
+All of the above is captured as code in `monitoring/` (`cloudwatch-agent-config.json`, `collect-k8s-logs.sh`, `grafana-dashboard-ecommerce-app.json`, `setup.sh` running the SNS/alarm/agent/Prometheus commands end-to-end) rather than left as one-off CLI history — the network interface name in the CloudWatch config and the `host` dimension in `setup.sh`'s alarms are instance-specific and need checking against whatever instance this is re-run on.
