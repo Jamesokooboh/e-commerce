@@ -39,6 +39,12 @@ nodes:
       - containerPort: 30050
         hostPort: 30050
         protocol: TCP
+      - containerPort: 30081
+        hostPort: 30081
+        protocol: TCP
+      - containerPort: 30051
+        hostPort: 30051
+        protocol: TCP
 EOF
 chown ubuntu:ubuntu /home/ubuntu/kind-config.yaml
 

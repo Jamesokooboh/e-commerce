@@ -2,6 +2,7 @@ import { useParams } from "react-router"
 import { useEffect, useState } from "react"
 import Alert from "./Alert"
 import { useAlert } from "../AlertContext"
+import { BACKEND_URL } from "../config"
 export default function Detail(){
     const { id } = useParams()
     const { showAlert } = useAlert()
@@ -9,7 +10,7 @@ export default function Detail(){
     const [review, setReview] = useState("")
     const [comments, setComments] = useState([])
     useEffect(() => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/${id}`, {
+        fetch(`${BACKEND_URL}/${id}`, {
             method: "GET",
             headers: {
                 "Content-type": "Application/json"
@@ -23,7 +24,7 @@ export default function Detail(){
         })
     }, [id])
     const addToCart = async () => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/cart`, {
+        fetch(`${BACKEND_URL}/cart`, {
             method: "POST",
             credentials: "include",
             headers: {
@@ -50,7 +51,7 @@ export default function Detail(){
         if (review.length === 0){
             showAlert("Error", "Cannot post the empty comments")
         } else {
-            fetch(`${process.env.REACT_APP_BACKEND_URL}/reviews`, {
+            fetch(`${BACKEND_URL}/reviews`, {
                 method: "POST",
                 headers: {
                     "Content-type": "application/json"
@@ -70,7 +71,7 @@ export default function Detail(){
         }
     }
     useEffect(() => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/reviews?name=${encodeURIComponent(product.name)}`, {
+        fetch(`${BACKEND_URL}/reviews?name=${encodeURIComponent(product.name)}`, {
             method: "GET",
             headers: {
                 "Content-type": "application/json"

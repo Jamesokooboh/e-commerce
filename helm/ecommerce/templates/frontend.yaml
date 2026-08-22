@@ -18,6 +18,9 @@ spec:
           image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
           ports:
             - containerPort: {{ .Values.frontend.containerPort }}
+          env:
+            - name: BACKEND_URL
+              value: {{ .Values.config.backendUrl | quote }}
           resources:
             {{- toYaml .Values.frontend.resources | nindent 12 }}
           readinessProbe:

@@ -9,17 +9,18 @@ RUN npm install --legacy-peer-deps
 
 COPY . .
 
-ARG REACT_APP_BACKEND_URL=http://localhost:5000
-ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
-
 RUN npm run build
 
 
 # Stage 2: Serve the static files with unprivileged Nginx
 FROM nginxinc/nginx-unprivileged:stable-alpine AS runtime
 
+USER root
+
 COPY --chown=101:101 nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build --chown=101:101 /app/build /usr/share/nginx/html
+COPY docker-entrypoint.d/20-env-config.sh /docker-entrypoint.d/20-env-config.sh
+RUN chmod +x /docker-entrypoint.d/20-env-config.sh
 
 USER 101
 
