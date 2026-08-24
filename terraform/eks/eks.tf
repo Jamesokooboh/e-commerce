@@ -36,6 +36,36 @@ module "eks" {
   }
 }
 
+# EKS ships neither a default StorageClass provisioner nor the EBS CSI
+# driver pre-installed. gp2's "kubernetes.io/aws-ebs" StorageClass silently
+# routes through the CSI driver anyway (in-tree-to-CSI migration, on by
+# default in modern Kubernetes) - so PVCs hang in Pending forever until this
+# addon + its IRSA role exist. Found the hard way: PVC events said "waiting
+# for ebs.csi.aws.com" with nothing actually running to answer that.
+# Standalone resources (not module.eks's own cluster_addons input) to avoid
+# a circular module dependency - this needs module.eks's OIDC output, and
+# module.eks would need this role's ARN back if it went through the module.
+module "ebs_csi_irsa" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name             = "${var.cluster_name}-ebs-csi-irsa"
+  attach_ebs_csi_policy = true
+
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["kube-system:ebs-csi-controller-sa"]
+    }
+  }
+}
+
+resource "aws_eks_addon" "ebs_csi" {
+  cluster_name             = module.eks.cluster_name
+  addon_name                = "aws-ebs-csi-driver"
+  service_account_role_arn = module.ebs_csi_irsa.iam_role_arn
+}
+
 resource "aws_security_group" "alb" {
   name_prefix = "${var.cluster_name}-alb-"
   vpc_id      = module.vpc.vpc_id
