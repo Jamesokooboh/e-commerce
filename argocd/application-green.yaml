@@ -35,6 +35,8 @@ spec:
           value: "gp2"
         - name: ingress.enabled
           value: "false"
+        - name: hpa.enabled
+          value: "false"
   destination:
     server: https://kubernetes.default.svc
     namespace: green
