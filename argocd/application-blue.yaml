@@ -28,9 +28,9 @@ spec:
         - name: frontend.nodePort
           value: "30080"
         - name: config.backendUrl
-          value: "http://PLACEHOLDER-ALB-DNS:5000"
+          value: "http://eks-ecommerce-alb-1390046606.us-east-1.elb.amazonaws.com:5000"
         - name: config.frontendUrl
-          value: "http://PLACEHOLDER-ALB-DNS"
+          value: "http://eks-ecommerce-alb-1390046606.us-east-1.elb.amazonaws.com"
         - name: mongo.storageClassName
           value: "gp2"
         - name: ingress.enabled
