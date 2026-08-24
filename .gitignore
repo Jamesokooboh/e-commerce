@@ -2,8 +2,9 @@ node_modules
 .env
 images.env
 
-terraform/.terraform/
-terraform/*.tfstate
-terraform/*.tfstate.*
-terraform/*.tfvars
-terraform/tfplan
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/*.tfvars
+**/tfplan
+**/tfdestroy
