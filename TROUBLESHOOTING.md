@@ -695,3 +695,56 @@ Matching how secrets have been handled everywhere else in this project (Helm's `
 - `curl http://<alb-dns>:5000/health` → `{"status":"ok","database":"connected",...}` — real Mongo connectivity through Cloud Map, not assumed from the service being "ACTIVE."
 - `curl -H "Origin: http://<alb-dns>" http://<alb-dns>:5000/products` → `200` with a matching `Access-Control-Allow-Origin` header — a genuine cross-origin request succeeds end-to-end.
 - All three ECS services (`mongo`, `backend`, `frontend`) confirmed at `runningCount == desiredCount`, `rolloutState: COMPLETED`, and both ALB target groups fully `healthy`.
+
+# Troubleshooting Log — Task 20 (EKS Production Deployment with Helm and ArgoCD)
+
+## Environment
+
+The capstone task — real managed Kubernetes (EKS), not Kind-on-EC2. Terraform via `terraform-aws-modules/vpc` and `terraform-aws-modules/eks` (`terraform/eks/`, a separate root from Task 16/17's `terraform/` since it's a genuinely different VPC) rather than hand-rolling 40+ resources — same reuse-over-reinvent call as Task 18's `kube-prometheus-stack`. Public subnets only, no bastion: EKS's public API endpoint gives direct local `kubectl` access via `aws eks update-kubeconfig`, the first task this session that needed zero SSH. Reused the same ECR images already proven in Task 19 — no new Docker builds. Two ArgoCD `Application` resources (`ecommerce-blue`/`ecommerce-green`, `argocd/application-blue.yaml`/`-green.yaml`) declare the same per-color override pattern Task 17 ran by hand via `helm install --set`, this time in git. ALB routing reused Task 17's proven manual target-group/listener pattern rather than installing the AWS Load Balancer Controller — deliberately, to avoid adding IAM OIDC/IRSA setup and a new failure surface for a benefit (auto-provisioning) that doesn't matter for one throwaway ALB.
+
+**Cost note**: unlike every other environment this session, EKS's control plane can't be stopped, only deleted — it bills continuously (~$0.10/hr) from `terraform apply` to `terraform destroy`. Torn down immediately after verification, same as always, just with less slack for a slow session.
+
+## Issue: t3.medium isn't Free-Tier-eligible on this account — again
+
+Same restriction discovered the hard way in Task 16. Caught this time *before* applying (checked the plan file against the account's confirmed Free-Tier-eligible instance list rather than re-deriving it), switched the node group to `m7i-flex.large` up front. Worth keeping a running note of this account's actual instance-type restriction rather than defaulting to whatever a tutorial or module example uses.
+
+## Issue: MongoDB's PVC stuck in `Pending` — three layered causes, not one
+
+**Symptom 1**: `mongo-0` never scheduled — `kubectl describe pvc` showed `waiting for first consumer` then `unbound immediate PersistentVolumeClaims`.
+
+**Root cause 1**: the chart's `mongo.storageClassName` defaults to `standard` (Kind's local-path-provisioner class) — doesn't exist on EKS. Real class here is `gp2`.
+
+**Fix attempt that didn't work**: updated the ArgoCD Application's Helm parameter to `gp2` and let it re-sync. The PVC still showed `storageClassName: standard` afterward — **`spec.volumeClaimTemplates` on a `StatefulSet` is immutable in Kubernetes**, so the API server silently can't apply that change to the existing object, and ArgoCD's sync just sits `OutOfSync` without a clear top-level error. Confirmed via `kubectl describe application` showing a second sync `OperationStarted` with no matching `OperationCompleted`.
+
+**Real fix**: deleted the `StatefulSet` itself (not just the PVC) in both namespaces, letting ArgoCD's `selfHeal` recreate it fresh from git with the correct template from the start.
+
+**Symptom 2, after the StorageClass was actually correct**: PVC still `Pending`. `kubectl describe pvc` events now showed `Waiting for a volume to be created ... by the external provisioner 'ebs.csi.aws.com'` — a different provisioner name than the StorageClass's own declared `kubernetes.io/aws-ebs`.
+
+**Root cause 2**: modern Kubernetes silently routes in-tree `kubernetes.io/aws-ebs` StorageClasses through the CSI driver anyway (in-tree-to-CSI migration, on by default) — but `terraform-aws-modules/eks` doesn't install the EBS CSI driver by default, and EKS ships neither it nor a working default StorageClass pre-installed. Nothing was listening to actually provision the volume.
+
+**Fix**: added the `aws-ebs-csi-driver` EKS addon via Terraform, with its own IRSA role (`terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks`) using the EKS module's OIDC provider. **Gotcha inside the gotcha**: initially tried wiring this through the `eks` module's own `cluster_addons` input, which created a circular dependency between two Terraform modules (the IRSA role needs the module's OIDC output; the module's addon input needs the IRSA role's output). Fixed by making the addon and its role standalone resources that consume the module's output, rather than feeding back into it.
+
+## Issue: backend pods stayed `CrashLoopBackOff`/`0/1` even after Mongo was genuinely up and reachable
+
+**Symptom**: once Mongo was actually running, backend pods kept failing their liveness probe and restarting — `kubectl logs` still showed `TopologyDescription: Unknown` for `mongo:27017`.
+
+**Investigated properly instead of assuming it was still the same connectivity problem**: checked the node security group's rules directly — the node-to-node ingress rule already covers the full ephemeral port range (`1025-65535`), which includes `27017`; egress was fully open. Ruled out `NetworkPolicy` (none existed outside the `argocd` namespace). Spun up a throwaway debug pod (`kubectl run debug-net --image=busybox`) in the same namespace and confirmed both DNS resolution (`mongo.blue.svc.cluster.local` → correct ClusterIP) and a raw TCP connection to port `27017` succeeded cleanly.
+
+**Root cause**: not infrastructure at all — these specific backend pods had been crash-looping since *before* Mongo existed (their PVC/StatefulSet had just been fixed), and had accumulated several failed restart cycles. **Fix**: deleted the crash-looping pods for a clean restart once Mongo was provably reachable; the fresh pods came up `1/1 Ready` immediately. Lesson: a pod with a long restart history from *before* a dependency was fixed is worth restarting fresh rather than assuming the same error will keep reproducing — the infra-level debugging (SG rules, DNS, raw TCP) was the right instinct, but it's also worth checking whether you're diagnosing a live problem or a stale one.
+
+## Issue: both ArgoCD Applications stuck on `Degraded` even with every actual app resource healthy
+
+**Symptom**: all pods `Running`, `1/1`, real traffic working — but `kubectl get applications` kept showing `Degraded`, not `Healthy`.
+
+**Root cause 1**: the chart's `Ingress` resource (`ingress.enabled: true` by default, from Task 13) was still being created, but this cluster deliberately has no Ingress controller — the plan chose manual ALB target groups instead. ArgoCD's health check for an `Ingress` with nothing fulfilling it reports unhealthy. **Fix**: `ingress.enabled=false` via the Application's Helm parameters.
+
+**Root cause 2, after fixing the Ingress**: `kubectl get hpa` showed `cpu: <unknown>/50%` — `metrics-server` isn't installed on this cluster (EKS doesn't ship it any more than a vanilla cluster does), so the HPA can never read the metric it targets, and ArgoCD's built-in HPA health check treats that as `Degraded`. Autoscaling isn't in this task's actual checklist. **Fix**: `hpa.enabled=false` rather than installing `metrics-server` for a capability nothing in this task needed — matches the same "don't add a component the task doesn't ask for" call as skipping the AWS Load Balancer Controller.
+
+Both Applications reached genuine `Synced`/`Healthy` only after both fixes — worth checking `kubectl get application <name> -n argocd -o jsonpath='{range .status.resources[*]}{.kind}{" "}{.name}{" "}{.health.status}{"\n"}{end}'` for exactly which resource ArgoCD considers unhealthy, rather than assuming a `Degraded` app status means the pods are broken.
+
+## Verified for real: the blue/green switch moved actual traffic, not just listener config
+
+- Blue and Green built from genuinely different backend image tags (`:194` vs `:latest`, ECR's most recent build at the time — `196`), confirmed distinct via the `build` field in `/health` (added back in Task 15) rather than assumed from the tag name alone.
+- Both colors verified independently reachable (`kubectl exec` into a live pod, curl the in-cluster Service directly) *before* the ALB was ever involved — no SSH/bastion needed to do this, unlike every prior task.
+- ALB created, both tiers × both colors of target groups, listeners defaulting to blue. Verified end-to-end: `200` on the frontend listener, `env.js` showing the ALB's own DNS as `BACKEND_URL` (the runtime-config-injection fix from Task 17 holding on its **fourth** environment in a row — Kind → Fargate → now EKS — still with zero rebuilds), a real cross-origin request to the backend listener returning `200` with a matching `Access-Control-Allow-Origin`, and `/health` confirming `build: "194"`.
+- Switched both listeners to green via `aws elbv2 modify-listener`. Re-ran the exact same verification — `/health` now returned `build: "196"`, proving the switch moved real live traffic to a different version, not just that the listener's configuration changed.
