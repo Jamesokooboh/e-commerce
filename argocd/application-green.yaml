@@ -33,6 +33,8 @@ spec:
           value: "http://PLACEHOLDER-ALB-DNS"
         - name: mongo.storageClassName
           value: "gp2"
+        - name: ingress.enabled
+          value: "false"
   destination:
     server: https://kubernetes.default.svc
     namespace: green
