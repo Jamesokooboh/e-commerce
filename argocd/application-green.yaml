@@ -31,6 +31,8 @@ spec:
           value: "http://PLACEHOLDER-ALB-DNS:5000"
         - name: config.frontendUrl
           value: "http://PLACEHOLDER-ALB-DNS"
+        - name: mongo.storageClassName
+          value: "gp2"
   destination:
     server: https://kubernetes.default.svc
     namespace: green
