@@ -1,7 +1,7 @@
 helm:
   parameters:
   - name: backend.image.tag
-    value: "737"
+    value: "738"
     forcestring: true
   - name: image.name
     value: okoobohjames/ecommerce-backend
