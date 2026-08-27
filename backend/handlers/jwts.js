@@ -13,7 +13,7 @@ const generateToken = (user) => {
 const verifyToken = (req, res, next) => {
     const token = req.cookies.token
     if (!token) {
-        res.status(401).json(["Error", "Please login to continue"])
+        return res.status(401).json(["Error", "Please login to continue"])
     }
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET)
