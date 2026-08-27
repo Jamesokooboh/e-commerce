@@ -89,7 +89,14 @@ resource "aws_cloudfront_distribution" "dynamic_app" {
     allowed_methods = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
     cached_methods  = ["GET", "HEAD"]
     cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # AWS managed: CachingDisabled (live per-request data)
-    compress        = true
+    # CachingDisabled alone doesn't forward all viewer headers to the origin
+    # (only what's in its own minimal header allowlist). Without this, the
+    # browser's Access-Control-Request-Headers preflight header never
+    # reaches Express's cors() middleware, which then has nothing to
+    # reflect back in Access-Control-Allow-Headers -- silently breaking
+    # every credentialed cross-origin request with a custom header.
+    origin_request_policy_id = "216adef6-5c7f-47e4-b989-5492eafa07d3" # AWS managed: AllViewer
+    compress                 = true
   }
 
   logging_config {
