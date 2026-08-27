@@ -12,7 +12,7 @@ root.render(
         <React.StrictMode>
             <SearchProvider>
                 <AlertProvider>
-                    <div className="min-h-screen w-full overflow-x-hidden overflow-y-auto font['Roboto'] text-black bg-white">
+                    <div className="min-h-screen w-full overflow-x-hidden bg-paper font-sans text-ink">
                         <App/>
                     </div>
                 </AlertProvider>

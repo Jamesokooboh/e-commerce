@@ -1,5 +1,4 @@
 import { useState } from "react"
-import Alert from "./Alert"
 import { useAlert } from "../AlertContext"
 import { BACKEND_URL } from "../config"
 export default function Authorize(){
@@ -26,7 +25,7 @@ export default function Authorize(){
                 })
             }).then((res) => {
                 return res.json()
-            }).then((data) => {
+            }).then(() => {
                 showAlert("Success", "You have logged in successfully")
             }).catch((err) => {
                 showAlert("Error", "An error occured while logging you in. Please try again later.")
@@ -35,39 +34,32 @@ export default function Authorize(){
         }
     }
     return (
-        <div className="body">
-            <h1>Log In</h1>
-            <input 
-                type="email" 
-                value={email} 
-                placeholder="Enter your e-mail" 
-                onChange={(e) => {
-                    setEmail(e.target.value)
-                }}
-                className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]"/>
-            <br /><br />
-            <input 
-                type="password" 
-                value={password} 
-                placeholder="Enter your password" 
-                onChange={(e) => {
-                    setPassword(e.target.value)
-                }}
-                className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]"/>
-            <br /><br />
-            <button 
-                className="p-1 w-[150px] rounded-[7px] bg-black text-white"
-                onClick={verify}>
-                Log In
-            </button>
-            {alert.length !== 0 && 
-            <Alert 
-                heading={alert[0]} 
-                message={alert[1]}  
-                onClose={() => {
-                    showAlert("", "")
-                }}
-            />}
+        <div className="auth-card">
+            <span className="eyebrow">Welcome back</span>
+            <h1 className="mb-6 mt-1 font-display text-2xl font-semibold">Log In</h1>
+            <div className="flex flex-col gap-4">
+                <input
+                    type="email"
+                    value={email}
+                    placeholder="Enter your e-mail"
+                    onChange={(e) => {
+                        setEmail(e.target.value)
+                    }}
+                    className="field" />
+                <input
+                    type="password"
+                    value={password}
+                    placeholder="Enter your password"
+                    onChange={(e) => {
+                        setPassword(e.target.value)
+                    }}
+                    className="field" />
+                <button
+                    className="btn-primary mt-2"
+                    onClick={verify}>
+                    Log In
+                </button>
+            </div>
         </div>
     )
 }

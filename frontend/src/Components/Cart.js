@@ -1,4 +1,3 @@
-import Alert from "./Alert"
 import { useEffect, useState } from "react"
 import { useAlert } from "../AlertContext"
 import { BACKEND_URL } from "../config"
@@ -87,49 +86,43 @@ export default function Cart() {
     // first, or rendering it throws and blanks the whole page.
     const items = cart.filter((item) => item.cartItem && item.cartItem.length > 0)
     return (
-        <div className="body">
-            <h1>Cart Items</h1>
+        <div className="flex flex-col gap-8">
+            <div>
+                <span className="eyebrow">Your bag</span>
+                <h1 className="font-display text-3xl font-semibold">Cart</h1>
+            </div>
             {items.length === 0 ? (
-                <h2>Your cart is empty</h2>
-            ) : (<>
-                <h2>Here are the products you added to cart:</h2>
-                <div className="clist">
+                <p className="text-muted">Your cart is empty.</p>
+            ) : (
+                <div className="flex flex-col gap-4">
                     {items.map((item, index) => (
-                        <div key={index} className="icard">
-                            <img src={item.cartItem[0].image} className="cimg" />
-                            <div className="pinfo">
-                                <h3>{item.cartItem[0].name}</h3>
-                                <p className="price">Price: ₦{item.cartItem[0].price}</p>
-                                <p className="description">Description: {item.cartItem[0].description}</p>
+                        <div key={index} className="card flex flex-col gap-5 p-4 sm:flex-row sm:items-center">
+                            <img src={item.cartItem[0].image} alt={item.cartItem[0].name} className="h-28 w-28 shrink-0 rounded-xl object-cover" />
+                            <div className="flex-1">
+                                <h3 className="font-display font-medium">{item.cartItem[0].name}</h3>
+                                <p className="price text-accent-ink">₦{item.cartItem[0].price}</p>
+                                <p className="text-sm text-muted">{item.cartItem[0].description}</p>
                             </div>
-                            <div className="a2cBtn">
+                            <div className="flex shrink-0 gap-2">
                                 <button
-                                    className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]"
+                                    className="btn-primary"
                                     onClick={() => {
                                         buyNow(item.cartItem[0])
                                     }}>
                                     Buy Now
                                 </button>
-                                <button 
-                                    className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]" 
+                                <button
+                                    className="btn-secondary"
                                     onClick={() => {
                                         removeItem(item.cartItem[0])
                                     }}>
-                                    Remove Item
-                                    </button>
+                                    Remove
+                                </button>
                             </div>
                         </div>
                     ))}
                 </div>
-            </>)}
-            {alert.length > 0 && 
-            <Alert 
-                heading={alert[0]} 
-                message={alert[1]} 
-                onClose={() => {
-                    showAlert("", "")
-                }}
-            />}
+            )}
         </div>
     )
 }

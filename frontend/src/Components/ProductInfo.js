@@ -1,6 +1,5 @@
 import { useParams } from "react-router"
 import { useEffect, useState } from "react"
-import Alert from "./Alert"
 import { useAlert } from "../AlertContext"
 import { BACKEND_URL } from "../config"
 export default function Detail(){
@@ -32,11 +31,11 @@ export default function Detail(){
             },
             body: JSON.stringify({
                 cartItem: [{
-                    image: product.image, 
-                    name: product.name, 
-                    price: product.price, 
+                    image: product.image,
+                    name: product.name,
+                    price: product.price,
                     description: product.description
-                }] 
+                }]
             })
         }).then((res) => {
             return res.json()
@@ -89,7 +88,7 @@ export default function Detail(){
                 showAlert(data[0], data[1])
             }).catch((error) => {
                 console.log(error)
-            })   
+            })
         }
     }
     useEffect(() => {
@@ -107,57 +106,56 @@ export default function Detail(){
         })
     }, [product])
     return (
-        <div className="body">
-            <div>
-                <h1>{product.name}</h1>
-                <img src={product.image} className="productImg"/>
-                <div className="productInfo">
-                    <p><b>Price:</b> ₦{product.price}</p>
-                    <p><b>Description:</b> {product.description}</p>
+        <div className="flex flex-col gap-12">
+            <div className="grid gap-10 md:grid-cols-2">
+                <div className="aspect-square overflow-hidden rounded-2xl border border-line bg-accent-soft">
+                    <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
                 </div>
-                <br/><br/>
-                <button 
-                    className="p-1 w-[150px] rounded-[7px] bg-black text-white" 
-                    onClick={async() => {
-                        await addToCart(product)
-                    }}>
-                    Add to Cart
-                </button>
-                <button
-                    className="p-1 w-[150px] rounded-[7px] bg-black text-white"
-                    onClick={buyNow}>
-                    Buy Now
-                </button>
-                <br/><br/>
+                <div className="flex flex-col gap-4">
+                    <h1 className="font-display text-3xl font-semibold">{product.name}</h1>
+                    <p className="price text-2xl text-accent-ink">₦{product.price}</p>
+                    <p className="text-muted">{product.description}</p>
+                    <div className="mt-4 flex gap-3">
+                        <button
+                            className="btn-secondary flex-1"
+                            onClick={async() => {
+                                await addToCart(product)
+                            }}>
+                            Add to Cart
+                        </button>
+                        <button
+                            className="btn-primary flex-1"
+                            onClick={buyNow}>
+                            Buy Now
+                        </button>
+                    </div>
+                </div>
             </div>
-            <div>
-                <br/><br/>
-                <h1>Reviews</h1>
-                <textarea placeholder="Write your comment/s about the product here..." onChange={(e) => setReview(e.target.value)}></textarea>
-                <br/><br/>
-                <button 
-                    className="p-1 w-[150px] rounded-[7px] bg-black text-white" 
+            <div className="flex flex-col gap-5 border-t border-line pt-10">
+                <h2 className="font-display text-xl font-semibold">Reviews</h2>
+                <textarea
+                    placeholder="Write your comment/s about the product here..."
+                    onChange={(e) => setReview(e.target.value)}
+                    className="field h-28 resize-none" />
+                <button
+                    className="btn-primary self-start"
                     onClick={() => {
                         postReview(product.name)
                     }}>
-                    Comment
+                    Post Review
                 </button>
-                <h2>See the reviews from our other customers who bought the same product</h2>
-                {comments.map((review, index) => (
-                    <div key={index} className="comments">
-                        <h3>{review.name}</h3>
-                        <br/>
-                        <p>{review.comment}</p>
-                    </div>
-                ))}
+                <h3 className="text-sm text-muted">See the reviews from our other customers who bought the same product</h3>
+                <div className="flex flex-col gap-4">
+                    {comments.length === 0 ? (
+                        <p className="text-muted">No reviews yet — be the first to leave one.</p>
+                    ) : comments.map((review, index) => (
+                        <div key={index} className="card p-4">
+                            <h3 className="font-medium">{review.name}</h3>
+                            <p className="mt-1 text-muted">{review.comment}</p>
+                        </div>
+                    ))}
+                </div>
             </div>
-            {alert.length > 0 && 
-            <Alert 
-                heading = { alert[0] } 
-                message = { alert[1] } 
-                onClose = { () => {
-                    showAlert("", "")
-                }}/>}
         </div>
     )
 }
