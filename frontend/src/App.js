@@ -5,6 +5,7 @@ import ProductForm from "./Components/ProductForm"
 import MyProducts from "./Components/MyProducts"
 import ProductList from "./Components/ProductList"
 import Cart from "./Components/Cart"
+import Orders from "./Components/Orders"
 import Result from "./Components/Results"
 import AlertWrapper from "./Components/AlertWrapper"
 import Detail from "./Components/ProductInfo"
@@ -45,6 +46,9 @@ export default function App(){
                 <Link to="/cart">
                     <button>Cart</button>
                 </Link>
+                <Link to="/orders">
+                    <button>My Orders</button>
+                </Link>
             </div>
             <Routes>
                 <Route path="/auth" element={<Register/>}/>
@@ -53,6 +57,7 @@ export default function App(){
                 <Route path="/my-products" element={<MyProducts/>}/>
                 <Route path="/" element={<ProductList/>}/>
                 <Route path="/cart" element={<Cart/>}/>
+                <Route path="/orders" element={<Orders/>}/>
                 <Route path="/searchProducts" element={<Result/>}/>
                 <Route path="/:id" element={<Detail/>}/>
             </Routes>

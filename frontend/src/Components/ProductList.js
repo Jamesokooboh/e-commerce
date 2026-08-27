@@ -47,6 +47,28 @@ export default function ProductList() {
             console.log(err)
         })
     }
+    const buyNow = (product) => {
+        fetch(`${BACKEND_URL}/checkout`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-type": "application/json",
+            },
+            body: JSON.stringify({
+                name: product.name,
+                price: product.price,
+                description: product.description,
+                image: product.image
+            })
+        }).then((res) => {
+            return res.json()
+        }).then((data) => {
+            showAlert(data[0], data[1])
+        }).catch((err) => {
+            showAlert("Error", "Failed to place order")
+            console.log(err)
+        })
+    }
     return (
         <div className="mt-2.5 overflow-y-auto h-[100vh]">
             <Search />
@@ -66,7 +88,13 @@ export default function ProductList() {
                             Add to Cart
                         </button>
                         <br /><br />
-                        <button className="p-1 w-[150px] rounded-[7px] bg-black text-white">Buy Now</button>
+                        <button
+                            className="p-1 w-[150px] rounded-[7px] bg-black text-white"
+                            onClick={() => {
+                                buyNow(product)
+                            }}>
+                            Buy Now
+                        </button>
                     </div>
                 ))}
             </div>

@@ -27,6 +27,8 @@ const showProduct = require("./handlers/showProduct")
 const saveComment = require("./handlers/saveComment")
 const showReview = require("./handlers/showReview")
 const mail = require("./handlers/mail")
+const checkout = require("./handlers/checkout")
+const showOrders = require("./handlers/showOrders")
 const app = express()
 require("dotenv").config()
 const allowedOrigins = (process.env.REACT_APP_FRONTEND_URL || "").split(",").map((origin) => origin.trim())
@@ -129,6 +131,12 @@ app.get("/cart", verifyToken, async (req, res) => {
 })
 app.delete("/cart", verifyToken, async (req, res) => {
     await deleteCart(req, res)
+})
+app.post("/checkout", verifyToken, async (req, res) => {
+    await checkout(req, res)
+})
+app.get("/orders", verifyToken, async (req, res) => {
+    await showOrders(req, res)
 })
 app.post("/searchProducts", async (req, res) => {
     await searchProducts(req, res)
