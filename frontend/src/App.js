@@ -11,15 +11,18 @@ import AlertWrapper from "./Components/AlertWrapper"
 import Detail from "./Components/ProductInfo"
 import AccountMenu from "./Components/AccountMenu"
 import { useAlert } from "./AlertContext"
+import { useAuth } from "./AuthContext"
 import { BACKEND_URL } from "./config"
 export default function App(){
     const { showAlert } = useAlert()
+    const { loggedIn, logout } = useAuth()
     const handleLogout = () => {
         fetch(`${BACKEND_URL}/logout`, {
             method: "POST",
             credentials: "include"
         }).then((res) => res.json()).then((data) => {
             showAlert(data[0], data[1])
+            logout()
         }).catch(() => {
             showAlert("Error", "Failed to log out. Please try again.")
         })
@@ -40,7 +43,7 @@ export default function App(){
                     </nav>
                     <div className="flex items-center gap-3">
                         <Link to="/cart" className="btn-secondary">Cart</Link>
-                        <AccountMenu onLogout={handleLogout} />
+                        <AccountMenu loggedIn={loggedIn} onLogout={handleLogout} />
                     </div>
                 </div>
             </header>

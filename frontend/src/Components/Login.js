@@ -1,10 +1,12 @@
 import { useState } from "react"
 import { useAlert } from "../AlertContext"
+import { useAuth } from "../AuthContext"
 import { BACKEND_URL } from "../config"
 export default function Authorize(){
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
     const { showAlert } = useAlert()
+    const { login } = useAuth()
     const verify = () => {
         if (email === "" || password === "")
             showAlert("Error", "Please fill up the details properly")
@@ -25,8 +27,9 @@ export default function Authorize(){
                 })
             }).then((res) => {
                 return res.json()
-            }).then(() => {
-                showAlert("Success", "You have logged in successfully")
+            }).then((data) => {
+                showAlert(data[0], data[1])
+                if (data[0] === "Success") login()
             }).catch((err) => {
                 showAlert("Error", "An error occured while logging you in. Please try again later.")
                 console.log(err)
