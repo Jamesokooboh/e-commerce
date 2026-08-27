@@ -164,6 +164,19 @@ app.get("/health", (req, res) => {
 app.get("/:id", async (req, res) => {
     await showProduct(req, res)
 })
+app.use((err, req, res, next) => {
+    if (err && err.name === "MulterError") {
+        const message = err.code === "LIMIT_FILE_SIZE"
+            ? "Image must be smaller than 8MB"
+            : "Failed to upload the image"
+        return res.status(400).json(["Error", message])
+    }
+    if (err) {
+        console.error(err)
+        return res.status(500).json(["Error", "Something went wrong. Please try again later."])
+    }
+    next()
+})
 process.on("unhandledRejection", (err) => {
     console.error("Unhandled rejection in a route handler:", err)
 })
