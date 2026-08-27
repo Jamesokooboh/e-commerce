@@ -68,6 +68,20 @@ export default function Detail(){
             console.log(err)
         })
     }
+    const loadComments = () => {
+        fetch(`${BACKEND_URL}/reviews?name=${encodeURIComponent(product.name)}`, {
+            method: "GET",
+            headers: {
+                "Content-type": "application/json"
+            }
+        }).then((res) => {
+            return res.json()
+        }).then((data) => {
+            setComments(data)
+        }).catch((error) => {
+            console.log(error)
+        })
+    }
     const postReview = (name) => {
         if (review.length === 0){
             showAlert("Error", "Cannot post the empty comments")
@@ -86,24 +100,17 @@ export default function Detail(){
                 return res.json()
             }).then((data) => {
                 showAlert(data[0], data[1])
+                if (data[0] === "Success") {
+                    setReview("")
+                    loadComments()
+                }
             }).catch((error) => {
                 console.log(error)
             })
         }
     }
     useEffect(() => {
-        fetch(`${BACKEND_URL}/reviews?name=${encodeURIComponent(product.name)}`, {
-            method: "GET",
-            headers: {
-                "Content-type": "application/json"
-            }
-        }).then((res) => {
-            return res.json()
-        }).then((data) => {
-            setComments(data)
-        }).catch((error) => {
-            console.log(error)
-        })
+        loadComments()
     }, [product])
     return (
         <div className="flex flex-col gap-12">
@@ -135,6 +142,7 @@ export default function Detail(){
                 <h2 className="font-display text-xl font-semibold">Reviews</h2>
                 <textarea
                     placeholder="Write your comment/s about the product here..."
+                    value={review}
                     onChange={(e) => setReview(e.target.value)}
                     className="field h-28 resize-none" />
                 <button
