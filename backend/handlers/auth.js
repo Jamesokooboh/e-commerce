@@ -41,27 +41,39 @@ const login = async (req, res) => {
 }
 const oauth = async (req, res) => {
     const { token } = req.body
-    const ticket = await client.verifyIdToken({
-        idToken: token,
-        audience: process.env.CLIENT_ID
-    })
-    const payload = ticket.getPayload()
-    const user = await users.findOne({ email: payload.email })
-    let newToken
-    if (user) {
-        newToken = generateToken(user)
-    } else {
-        const newUser = new users({
-            name: payload.name,
-            email: payload.email,
-            role: payload.email,
-            password: payload.password
+    try {
+        const ticket = await client.verifyIdToken({
+            idToken: token,
+            audience: process.env.CLIENT_ID
         })
-        await newUser.save()
-        newToken = generateToken(newUser)
+        const payload = ticket.getPayload()
+        const user = await users.findOne({ email: payload.email })
+        let newToken
+        if (user) {
+            newToken = generateToken(user)
+        } else {
+            // Google's ID token never includes a password, but the schema
+            // requires one -- a random unusable hash keeps the schema
+            // satisfied without ever being a real, guessable credential
+            // (Google sign-in users never authenticate via the password
+            // login path anyway).
+            const randomPassword = require("crypto").randomBytes(32).toString("hex")
+            const hashed = await bcrypt.hash(randomPassword, 10)
+            const newUser = new users({
+                name: payload.name,
+                email: payload.email,
+                role: "Consumer",
+                password: hashed
+            })
+            await newUser.save()
+            newToken = generateToken(newUser)
+        }
+        res.status(200).cookie("token", newToken, {
+            httpOnly: true
+        }).json(["Success", "You have logged in successfully"])
+    } catch (error) {
+        console.log(error)
+        res.status(401).json(["Error", "Google sign-in failed. Please try again."])
     }
-    res.status(200).cookie("token", newToken, {
-        httpOnly: true
-    }).json(["Success", "You have logged in successfully"])
 }
 module.exports = { signup, login, oauth }
