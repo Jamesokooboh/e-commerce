@@ -12,7 +12,7 @@ export default function Search() {
     const handleSearch = () => {
         navigate("/searchProducts")
         if (input === "" || input === null) {
-            showAlert(["Error", "Cannot search for an empty input"])
+            showAlert("Error", "Cannot search for an empty input")
         } else {
             fetch(`${BACKEND_URL}/searchProducts`, {
                 method: "POST",

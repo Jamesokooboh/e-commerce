@@ -24,7 +24,7 @@ export default function Result() {
         }).then((res) => {
             return res.json()
         }).then((data) => {
-            showAlert([data[0], data[1]])
+            showAlert(data[0], data[1])
         }).catch((err) => {
             showAlert("Error", "Failed to add item to cart")
             console.log(err)
