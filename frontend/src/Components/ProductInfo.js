@@ -47,6 +47,28 @@ export default function Detail(){
             console.log(err)
         })
     }
+    const buyNow = async () => {
+        fetch(`${BACKEND_URL}/checkout`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-type": "application/json",
+            },
+            body: JSON.stringify({
+                name: product.name,
+                price: product.price,
+                description: product.description,
+                image: product.image
+            })
+        }).then((res) => {
+            return res.json()
+        }).then((data) => {
+            showAlert(data[0], data[1])
+        }).catch((err) => {
+            showAlert("Error", "Failed to place order")
+            console.log(err)
+        })
+    }
     const postReview = (name) => {
         if (review.length === 0){
             showAlert("Error", "Cannot post the empty comments")
@@ -101,7 +123,11 @@ export default function Detail(){
                     }}>
                     Add to Cart
                 </button>
-                <button className="p-1 w-[150px] rounded-[7px] bg-black text-white">Buy Now</button>
+                <button
+                    className="p-1 w-[150px] rounded-[7px] bg-black text-white"
+                    onClick={buyNow}>
+                    Buy Now
+                </button>
                 <br/><br/>
             </div>
             <div>

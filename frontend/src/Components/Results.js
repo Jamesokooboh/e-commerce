@@ -30,6 +30,28 @@ export default function Result() {
             console.log(err)
         })
     }
+    const buyNow = (product) => {
+        fetch(`${BACKEND_URL}/checkout`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-type": "application/json",
+            },
+            body: JSON.stringify({
+                name: product.name,
+                price: product.price,
+                description: product.description,
+                image: product.image
+            })
+        }).then((res) => {
+            return res.json()
+        }).then((data) => {
+            showAlert(data[0], data[1])
+        }).catch((err) => {
+            showAlert("Error", "Failed to place order")
+            console.log(err)
+        })
+    }
     return (
         <div className="clist">
             {res.length > 0 &&
@@ -49,7 +71,13 @@ export default function Result() {
                                 }} >
                                     Add to Cart
                                 </button>
-                            <button className="p-1 w-[150px] rounded-[7px] bg-black text-white">Buy Now</button>
+                            <button
+                                className="p-1 w-[150px] rounded-[7px] bg-black text-white"
+                                onClick={() => {
+                                    buyNow(product)
+                                }}>
+                                Buy Now
+                            </button>
                         </div>
                     </div>
                 ))}

@@ -5,7 +5,7 @@ import { BACKEND_URL } from "../config"
 export default function Cart() {
     const [cart, setCart] = useState([])
     const { showAlert } = useAlert()
-    useEffect(() => {
+    const loadCart = () => {
         fetch(`${BACKEND_URL}/cart`, {
             method: "GET",
             credentials: "include",
@@ -24,6 +24,9 @@ export default function Cart() {
             console.log(err)
             showAlert("Error", "Failed to fetch cart items")
         })
+    }
+    useEffect(() => {
+        loadCart()
     }, [])
     const removeItem = (item) => {
         fetch(`${BACKEND_URL}/cart`, {
@@ -44,7 +47,38 @@ export default function Cart() {
             return res.json()
         }).then((data) => {
             showAlert(data[0], data[1])
+            loadCart()
         }).catch((err) => {
+            console.log(err)
+        })
+    }
+    const buyNow = (item) => {
+        fetch(`${BACKEND_URL}/checkout`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-type": "application/json",
+            },
+            body: JSON.stringify({
+                name: item.name,
+                price: item.price,
+                description: item.description,
+                image: item.image
+            })
+        }).then((res) => res.json()).then((data) => {
+            // A purchased item shouldn't linger in the cart -- remove it,
+            // then refresh so the list reflects both changes at once.
+            fetch(`${BACKEND_URL}/cart`, {
+                method: "DELETE",
+                credentials: "include",
+                headers: { "Content-type": "application/json" },
+                body: JSON.stringify({ cartItem: [item] })
+            }).then(() => {
+                showAlert(data[0], data[1])
+                loadCart()
+            })
+        }).catch((err) => {
+            showAlert("Error", "Failed to place order")
             console.log(err)
         })
     }
@@ -69,7 +103,13 @@ export default function Cart() {
                                 <p className="description">Description: {item.cartItem[0].description}</p>
                             </div>
                             <div className="a2cBtn">
-                                <button className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]">Buy Now</button>
+                                <button
+                                    className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]"
+                                    onClick={() => {
+                                        buyNow(item.cartItem[0])
+                                    }}>
+                                    Buy Now
+                                </button>
                                 <button 
                                     className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]" 
                                     onClick={() => {
