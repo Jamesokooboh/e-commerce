@@ -83,10 +83,13 @@ resource "aws_cloudfront_distribution" "dynamic_app" {
   default_cache_behavior {
     target_origin_id       = "task22-ec2-origin"
     viewer_protocol_policy = "redirect-to-https"
-    allowed_methods        = ["GET", "HEAD"]
-    cached_methods         = ["GET", "HEAD"]
-    cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # AWS managed: CachingDisabled (live per-request data)
-    compress               = true
+    # This is a real API now (signup/login/cart/etc), not the read-only
+    # checkpoint 2 demo -- needs to allow write methods through, or
+    # CloudFront rejects them with a 403 before the origin ever sees them.
+    allowed_methods = ["GET", "HEAD", "OPTIONS", "PUT", "PATCH", "POST", "DELETE"]
+    cached_methods  = ["GET", "HEAD"]
+    cache_policy_id = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # AWS managed: CachingDisabled (live per-request data)
+    compress        = true
   }
 
   logging_config {
