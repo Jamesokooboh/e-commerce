@@ -27,8 +27,15 @@ const showReview = require("./handlers/showReview")
 const mail = require("./handlers/mail")
 const app = express()
 require("dotenv").config()
+const allowedOrigins = (process.env.REACT_APP_FRONTEND_URL || "").split(",").map((origin) => origin.trim())
 app.use(cors({
-    origin: process.env.REACT_APP_FRONTEND_URL,
+    origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true)
+        } else {
+            callback(new Error("Not allowed by CORS"))
+        }
+    },
     credentials: true
 }))
 app.use(
