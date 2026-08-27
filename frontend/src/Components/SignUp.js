@@ -1,5 +1,6 @@
 import { useState } from "react"
 import { useAlert } from "../AlertContext"
+import { useAuth } from "../AuthContext"
 import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google"
 import { BACKEND_URL } from "../config"
 export default function Register() {
@@ -8,6 +9,7 @@ export default function Register() {
     const [password, setPassword] = useState("")
     const [role, setRole] = useState("")
     const { showAlert } = useAlert()
+    const { login } = useAuth()
     const verify = () => {
         if (name === "" || email === "" || password === "" || role === "")
             showAlert("Error", "Please fill up the details properly")
@@ -83,7 +85,8 @@ export default function Register() {
                                 }).then((res) => {
                                     return res.json()
                                 }).then((data) => {
-                                    showAlert(data.type, data.message)
+                                    showAlert(data[0], data[1])
+                                    if (data[0] === "Success") login()
                                 }).catch((err) => {
                                     showAlert("Error", "An error occurred while signing you up. Please try again later.")
                                     console.log(err)

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react"
 import { Link } from "react-router"
-export default function AccountMenu({ onLogout }) {
+export default function AccountMenu({ loggedIn, onLogout }) {
     const [open, setOpen] = useState(false)
     const ref = useRef(null)
 
@@ -26,13 +26,18 @@ export default function AccountMenu({ onLogout }) {
             </button>
             {open && (
                 <div className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-2xl border border-line bg-surface py-1 shadow-lg">
-                    <Link to="/verify" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-ink hover:bg-accent2-soft">Log In</Link>
-                    <Link to="/auth" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-ink hover:bg-accent2-soft">Sign Up</Link>
-                    <button
-                        onClick={() => { setOpen(false); onLogout() }}
-                        className="block w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-accent2-soft">
-                        Log Out
-                    </button>
+                    {loggedIn ? (
+                        <button
+                            onClick={() => { setOpen(false); onLogout() }}
+                            className="block w-full px-4 py-2.5 text-left text-sm text-ink hover:bg-accent2-soft">
+                            Log Out
+                        </button>
+                    ) : (
+                        <>
+                            <Link to="/auth" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-ink hover:bg-accent2-soft">Sign Up</Link>
+                            <Link to="/verify" onClick={() => setOpen(false)} className="block px-4 py-2.5 text-sm text-ink hover:bg-accent2-soft">Log In</Link>
+                        </>
+                    )}
                 </div>
             )}
         </div>
