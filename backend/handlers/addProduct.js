@@ -10,7 +10,8 @@ module.exports = addProduct = async (req, res) => {
         name: name,
         price: price,
         description: description,
-        image: `${process.env.REACT_APP_BACKEND_URL}/images/${imageURL}`
+        image: `${process.env.REACT_APP_BACKEND_URL}/images/${imageURL}`,
+        retailer: req.user.email
     })
     await Product.save()
     res.status(200).json(["Success", "Product added successfully"])

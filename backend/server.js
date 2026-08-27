@@ -16,6 +16,9 @@ const checkRole = require("./handlers/checkRole")
 const upload = require("./handlers/upload")
 const addProduct = require("./handlers/addProduct")
 const listProducts = require("./handlers/listProducts")
+const myProducts = require("./handlers/myProducts")
+const editProduct = require("./handlers/editProduct")
+const deleteProduct = require("./handlers/deleteProduct")
 const addToCart = require("./handlers/addToCart")
 const showCart = require("./handlers/showCart")
 const deleteCart = require("./handlers/deleteCart")
@@ -108,6 +111,15 @@ app.post("/products", verifyToken, checkRole("Retailer"), upload.single("image")
 })
 app.get("/products", async (req, res) => {
     await listProducts(req, res)
+})
+app.get("/my-products", verifyToken, checkRole("Retailer"), async (req, res) => {
+    await myProducts(req, res)
+})
+app.put("/products/:id", verifyToken, checkRole("Retailer"), upload.single("image"), async (req, res) => {
+    await editProduct(req, res)
+})
+app.delete("/products/:id", verifyToken, checkRole("Retailer"), async (req, res) => {
+    await deleteProduct(req, res)
 })
 app.post("/cart", verifyToken, async (req, res) => {
     await addToCart(req, res)
