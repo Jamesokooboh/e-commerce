@@ -38,6 +38,7 @@ services:
       REACT_APP_FRONTEND_URL: "${FRONTEND_URL:-http://localhost:3000}"
       REACT_APP_BACKEND_URL: "${PUBLIC_BACKEND_URL:-http://localhost:${BACKEND_PORT:-5000}}"
       JWT_SECRET: "${JWT_SECRET:?JWT_SECRET must be set in .env}"
+      CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
     networks:
       - ecommerce_network
     depends_on:
