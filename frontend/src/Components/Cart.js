@@ -48,15 +48,19 @@ export default function Cart() {
             console.log(err)
         })
     }
+    // Cart documents can persist with an empty cartItem array (e.g. after
+    // removing the last item) -- item.cartItem[0] must be filtered out
+    // first, or rendering it throws and blanks the whole page.
+    const items = cart.filter((item) => item.cartItem && item.cartItem.length > 0)
     return (
         <div className="body">
             <h1>Cart Items</h1>
-            {cart.length === 0 ? (
+            {items.length === 0 ? (
                 <h2>Your cart is empty</h2>
             ) : (<>
                 <h2>Here are the products you added to cart:</h2>
                 <div className="clist">
-                    {cart.map((item, index) => (
+                    {items.map((item, index) => (
                         <div key={index} className="icard">
                             <img src={item.cartItem[0].image} className="cimg" />
                             <div className="pinfo">
