@@ -17,20 +17,23 @@ export default function Orders() {
     }, [])
 
     return (
-        <div className="body">
-            <h1>My Orders</h1>
+        <div className="flex flex-col gap-8">
+            <div>
+                <span className="eyebrow">Order history</span>
+                <h1 className="font-display text-3xl font-semibold">My Orders</h1>
+            </div>
             {orders.length === 0 ? (
-                <h2>You haven't placed any orders yet</h2>
+                <p className="text-muted">You haven't placed any orders yet.</p>
             ) : (
-                <div className="clist">
+                <div className="flex flex-col gap-4">
                     {orders.map((order) => (
-                        <div key={order._id} className="icard">
-                            <img src={order.item.image} className="cimg" />
-                            <div className="pinfo">
-                                <h3>{order.item.name}</h3>
-                                <p className="price">Price: ₦{order.item.price}</p>
-                                <p className="description">Status: {order.status}</p>
-                                <p className="description">Ordered: {new Date(order.createdAt).toLocaleString()}</p>
+                        <div key={order._id} className="card flex items-center gap-5 p-4">
+                            <img src={order.item.image} alt={order.item.name} className="h-20 w-20 shrink-0 rounded-xl object-cover" />
+                            <div className="flex-1">
+                                <h3 className="font-display font-medium">{order.item.name}</h3>
+                                <p className="price text-accent-ink">₦{order.item.price}</p>
+                                <p className="text-sm text-muted">Status: {order.status}</p>
+                                <p className="text-sm text-muted">Ordered: {new Date(order.createdAt).toLocaleString()}</p>
                             </div>
                         </div>
                     ))}

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
 import { useNavigate } from "react-router"
-import Alert from "./Alert"
 import Search from "./Search"
 import { useAlert } from "../AlertContext"
 import { BACKEND_URL } from "../config"
@@ -32,11 +31,11 @@ export default function ProductList() {
             },
             body: JSON.stringify({
                 cartItem: [{
-                    image: product.image, 
-                    name: product.name, 
-                    price: product.price, 
+                    image: product.image,
+                    name: product.name,
+                    price: product.price,
                     description: product.description
-                }] 
+                }]
             })
         }).then((res) => {
             return res.json()
@@ -70,41 +69,45 @@ export default function ProductList() {
         })
     }
     return (
-        <div className="mt-2.5 overflow-y-auto h-[100vh]">
-            <Search />
-            <h1 className="m-2.5">Products Listings</h1>
-            <h2>Here is the product listing from our side, which you might find interesting:</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-                {products.map((product, index) => (
-                    <div className="border border-black p-4 rounded-lg shadow-md w-[300px]" key={index}>
-                        <img src={product.image} height={200} width={200} className="pimg"  onClick={() => { navigate(`/${product._id}`) }}/>
-                        <h3>{product.name}</h3>
-                        <p>Price: ₦{product.price}</p>
-                        <button 
-                            className="p-1 w-[150px] rounded-[7px] bg-black text-white" 
-                            onClick={ () => {
-                                addToCart(product)
-                            }}>
-                            Add to Cart
-                        </button>
-                        <br /><br />
-                        <button
-                            className="p-1 w-[150px] rounded-[7px] bg-black text-white"
-                            onClick={() => {
-                                buyNow(product)
-                            }}>
-                            Buy Now
-                        </button>
-                    </div>
-                ))}
+        <div className="flex flex-col gap-8">
+            <div className="flex flex-col gap-3">
+                <span className="eyebrow">The full catalog</span>
+                <h1 className="font-display text-3xl font-semibold">Shop everything on Benomhub</h1>
+                <p className="max-w-2xl text-muted">Browse listings from every retailer on the platform, added straight from their own dashboards.</p>
+                <Search />
             </div>
-            {alert.length > 0 && 
-                <Alert 
-                    heading = { alert[0] } 
-                    message = { alert[1] }  
-                    onClose={() => {
-                        showAlert("", "")
-                    }}/>}
+            {products.length === 0 ? (
+                <p className="text-muted">No products yet — check back soon.</p>
+            ) : (
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                    {products.map((product) => (
+                        <article className="card group flex flex-col overflow-hidden" key={product._id}>
+                            <button onClick={() => navigate(`/${product._id}`)} className="block aspect-square w-full overflow-hidden bg-accent-soft">
+                                <img
+                                    src={product.image}
+                                    alt={product.name}
+                                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                            </button>
+                            <div className="flex flex-1 flex-col gap-2 p-5">
+                                <h3 className="font-display text-lg font-medium leading-snug">{product.name}</h3>
+                                <p className="price text-lg text-accent-ink">₦{product.price}</p>
+                                <div className="mt-auto flex gap-2 pt-3">
+                                    <button
+                                        className="btn-secondary flex-1"
+                                        onClick={() => addToCart(product)}>
+                                        Add to Cart
+                                    </button>
+                                    <button
+                                        className="btn-primary flex-1"
+                                        onClick={() => buyNow(product)}>
+                                        Buy Now
+                                    </button>
+                                </div>
+                            </div>
+                        </article>
+                    ))}
+                </div>
+            )}
         </div>
     )
 }

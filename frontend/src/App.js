@@ -9,6 +9,7 @@ import Orders from "./Components/Orders"
 import Result from "./Components/Results"
 import AlertWrapper from "./Components/AlertWrapper"
 import Detail from "./Components/ProductInfo"
+import AccountMenu from "./Components/AccountMenu"
 import { useAlert } from "./AlertContext"
 import { BACKEND_URL } from "./config"
 export default function App(){
@@ -24,43 +25,38 @@ export default function App(){
         })
     }
     return (
-        <div className="overflow-y-hidden h-[100vh]">
+        <div className="min-h-screen bg-paper text-ink">
             <AlertWrapper />
-            <div className="sticky top-0 z-100 h-[60px] p-5 w-full bg-black text-white flex justify-around">
-                <Link to="/">
-                    <button className="">Home</button>
-                </Link>
-                <Link to="/auth">
-                    <button>Sign Up</button>
-                </Link>
-                <Link to="/verify">
-                    <button>Log In</button>
-                </Link>
-                <button onClick={handleLogout}>Log Out</button>
-                <Link to="/products">
-                    <button>Add Product</button>
-                </Link>
-                <Link to="/my-products">
-                    <button>My Products</button>
-                </Link>
-                <Link to="/cart">
-                    <button>Cart</button>
-                </Link>
-                <Link to="/orders">
-                    <button>My Orders</button>
-                </Link>
-            </div>
-            <Routes>
-                <Route path="/auth" element={<Register/>}/>
-                <Route path="/verify" element={<Authorize/>}/>
-                <Route path="/products" element={<ProductForm/>}/>
-                <Route path="/my-products" element={<MyProducts/>}/>
-                <Route path="/" element={<ProductList/>}/>
-                <Route path="/cart" element={<Cart/>}/>
-                <Route path="/orders" element={<Orders/>}/>
-                <Route path="/searchProducts" element={<Result/>}/>
-                <Route path="/:id" element={<Detail/>}/>
-            </Routes>
+            <header className="site-header">
+                <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-4">
+                    <Link to="/" className="font-display text-2xl font-semibold tracking-tight">
+                        Benomhub
+                    </Link>
+                    <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                        <Link to="/" className="nav-link">Shop</Link>
+                        <Link to="/my-products" className="nav-link">My Products</Link>
+                        <Link to="/products" className="nav-link">Sell an Item</Link>
+                        <Link to="/orders" className="nav-link">Orders</Link>
+                    </nav>
+                    <div className="flex items-center gap-3">
+                        <Link to="/cart" className="btn-secondary">Cart</Link>
+                        <AccountMenu onLogout={handleLogout} />
+                    </div>
+                </div>
+            </header>
+            <main className="mx-auto max-w-6xl px-6 py-10">
+                <Routes>
+                    <Route path="/auth" element={<Register/>}/>
+                    <Route path="/verify" element={<Authorize/>}/>
+                    <Route path="/products" element={<ProductForm/>}/>
+                    <Route path="/my-products" element={<MyProducts/>}/>
+                    <Route path="/" element={<ProductList/>}/>
+                    <Route path="/cart" element={<Cart/>}/>
+                    <Route path="/orders" element={<Orders/>}/>
+                    <Route path="/searchProducts" element={<Result/>}/>
+                    <Route path="/:id" element={<Detail/>}/>
+                </Routes>
+            </main>
         </div>
     )
 }

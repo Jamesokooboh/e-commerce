@@ -1,4 +1,3 @@
-import Alert from "./Alert"
 import { useAlert } from "../AlertContext"
 import { SearchContext } from "../SearchContext"
 import { useNavigate } from "react-router-dom"
@@ -36,23 +35,15 @@ export default function Search() {
         }
     }
     return (
-        <div className="sticky top-0 h-[10px] m-0 p-0 bg-none text-black">
-            <input 
-                type="search" 
-                placeholder="Search for products..."  
-                onChange={(e) => { setInput(e.target.value) }} className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]" />
-            <button 
-                onClick={handleSearch}
-                className="p-1 w-[150px] rounded-[7px] bg-black text-white">
-                    Search
-            </button>
-            {alert.length > 0 
-                && <Alert 
-                    heading = { alert[0] } 
-                    message = { alert[1] }  
-                    onClose = { () => {
-                        showAlert("", "")
-                    }}/>}
+        <div className="flex max-w-xl gap-3">
+            <input
+                type="search"
+                value={input}
+                placeholder="Search for products..."
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                className="field" />
+            <button onClick={handleSearch} className="btn-primary shrink-0">Search</button>
         </div>
     )
 }

@@ -64,64 +64,65 @@ export default function MyProducts() {
     }
 
     return (
-        <div className="body">
-            <h1>My Products</h1>
+        <div className="flex flex-col gap-8">
+            <div>
+                <span className="eyebrow">Retailer tools</span>
+                <h1 className="font-display text-3xl font-semibold">My Products</h1>
+            </div>
             {products.length === 0 ? (
-                <h2>You haven't added any products yet</h2>
+                <p className="text-muted">You haven't added any products yet.</p>
             ) : (
-                <div className="clist">
+                <div className="flex flex-col gap-4">
                     {products.map((product) => (
-                        <div key={product._id} className="icard">
-                            <img src={product.image} className="pimg" height={200} width={200} />
+                        <div key={product._id} className="card flex flex-col gap-5 p-5 sm:flex-row">
+                            <img src={product.image} alt={product.name} className="h-32 w-32 shrink-0 rounded-xl object-cover" />
                             {editingId === product._id ? (
-                                <div className="pinfo">
+                                <div className="flex flex-1 flex-col gap-3">
                                     <input
                                         type="text"
                                         value={form.name}
                                         onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                        className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]" />
-                                    <br /><br />
+                                        className="field" />
                                     <input
                                         type="number"
                                         value={form.price}
                                         onChange={(e) => setForm({ ...form, price: e.target.value })}
-                                        className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]" />
-                                    <br /><br />
+                                        className="field" />
                                     <textarea
                                         value={form.description}
                                         onChange={(e) => setForm({ ...form, description: e.target.value })}
-                                        className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px] h-[100px]" />
-                                    <br /><br />
+                                        className="field h-20 resize-none" />
                                     <input
                                         type="file"
                                         accept="image/*"
                                         onChange={(e) => setForm({ ...form, image: e.target.files[0] })}
-                                        className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]" />
-                                    <br /><br />
-                                    <button
-                                        className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[120px]"
-                                        onClick={() => saveEdit(product._id)}>
-                                        Save
-                                    </button>
-                                    <button
-                                        className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[120px]"
-                                        onClick={cancelEdit}>
-                                        Cancel
-                                    </button>
+                                        className="field" />
+                                    <div className="flex gap-2">
+                                        <button
+                                            className="btn-primary"
+                                            onClick={() => saveEdit(product._id)}>
+                                            Save
+                                        </button>
+                                        <button
+                                            className="btn-secondary"
+                                            onClick={cancelEdit}>
+                                            Cancel
+                                        </button>
+                                    </div>
                                 </div>
                             ) : (
-                                <div className="pinfo">
-                                    <h3>{product.name}</h3>
-                                    <p className="price">Price: ₦{product.price}</p>
-                                    <p className="description">Description: {product.description}</p>
-                                    <div className="a2cBtn">
+                                <div className="flex flex-1 flex-col gap-2">
+                                    <h3 className="font-display font-medium">{product.name}</h3>
+                                    <p className="price text-accent-ink">₦{product.price}</p>
+                                    <p className="text-sm text-muted">{product.description}</p>
+                                    <div className="mt-auto flex gap-2 pt-2">
                                         <button
-                                            className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]"
+                                            className="btn-secondary"
                                             onClick={() => startEdit(product)}>
                                             Edit
                                         </button>
                                         <button
-                                            className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]"
+                                            className="btn-outline"
                                             onClick={() => deleteProduct(product._id)}>
                                             Delete
                                         </button>
