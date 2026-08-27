@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useNavigate } from "react-router"
 import { useAlert } from "../AlertContext"
 import { useAuth } from "../AuthContext"
 import { BACKEND_URL } from "../config"
@@ -7,6 +8,7 @@ export default function Authorize(){
     const [password, setPassword] = useState("")
     const { showAlert } = useAlert()
     const { login } = useAuth()
+    const navigate = useNavigate()
     const verify = () => {
         if (email === "" || password === "")
             showAlert("Error", "Please fill up the details properly")
@@ -29,7 +31,10 @@ export default function Authorize(){
                 return res.json()
             }).then((data) => {
                 showAlert(data[0], data[1])
-                if (data[0] === "Success") login(data[2])
+                if (data[0] === "Success") {
+                    login(data[2])
+                    navigate("/")
+                }
             }).catch((err) => {
                 showAlert("Error", "An error occured while logging you in. Please try again later.")
                 console.log(err)

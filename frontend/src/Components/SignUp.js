@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useNavigate } from "react-router"
 import { useAlert } from "../AlertContext"
 import { useAuth } from "../AuthContext"
 import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google"
@@ -10,6 +11,7 @@ export default function Register() {
     const [role, setRole] = useState("")
     const { showAlert } = useAlert()
     const { login } = useAuth()
+    const navigate = useNavigate()
     const verify = () => {
         if (name === "" || email === "" || password === "" || role === "")
             showAlert("Error", "Please fill up the details properly")
@@ -34,10 +36,13 @@ export default function Register() {
                 return res.json()
             }).then((data) => {
                 showAlert(data[0], data[1])
-                setName("")
-                setEmail("")
-                setPassword("")
-                setRole("")
+                if (data[0] === "Success") {
+                    setName("")
+                    setEmail("")
+                    setPassword("")
+                    setRole("")
+                    navigate("/")
+                }
             }).catch((err) => {
                 showAlert("Error", "An error occured while signing you up. Please try again later.")
                 console.log(err)
@@ -86,7 +91,10 @@ export default function Register() {
                                     return res.json()
                                 }).then((data) => {
                                     showAlert(data[0], data[1])
-                                    if (data[0] === "Success") login(data[2])
+                                    if (data[0] === "Success") {
+                                        login(data[2])
+                                        navigate("/")
+                                    }
                                 }).catch((err) => {
                                     showAlert("Error", "An error occurred while signing you up. Please try again later.")
                                     console.log(err)
