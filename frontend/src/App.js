@@ -2,6 +2,7 @@ import { Link, Route, Routes } from "react-router"
 import Register from "./Components/SignUp"
 import Authorize from "./Components/Login"
 import ProductForm from "./Components/ProductForm"
+import MyProducts from "./Components/MyProducts"
 import ProductList from "./Components/ProductList"
 import Cart from "./Components/Cart"
 import Result from "./Components/Results"
@@ -38,6 +39,9 @@ export default function App(){
                 <Link to="/products">
                     <button>Add Product</button>
                 </Link>
+                <Link to="/my-products">
+                    <button>My Products</button>
+                </Link>
                 <Link to="/cart">
                     <button>Cart</button>
                 </Link>
@@ -46,6 +50,7 @@ export default function App(){
                 <Route path="/auth" element={<Register/>}/>
                 <Route path="/verify" element={<Authorize/>}/>
                 <Route path="/products" element={<ProductForm/>}/>
+                <Route path="/my-products" element={<MyProducts/>}/>
                 <Route path="/" element={<ProductList/>}/>
                 <Route path="/cart" element={<Cart/>}/>
                 <Route path="/searchProducts" element={<Result/>}/>

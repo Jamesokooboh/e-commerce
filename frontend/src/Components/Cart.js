@@ -65,7 +65,7 @@ export default function Cart() {
                             <img src={item.cartItem[0].image} className="cimg" />
                             <div className="pinfo">
                                 <h3>{item.cartItem[0].name}</h3>
-                                <p className="price">Price: {item.cartItem[0].price}</p>
+                                <p className="price">Price: ₦{item.cartItem[0].price}</p>
                                 <p className="description">Description: {item.cartItem[0].description}</p>
                             </div>
                             <div className="a2cBtn">

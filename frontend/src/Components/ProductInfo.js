@@ -90,7 +90,7 @@ export default function Detail(){
                 <h1>{product.name}</h1>
                 <img src={product.image} className="productImg"/>
                 <div className="productInfo">
-                    <p><b>Price:</b> ₹{product.price}</p>
+                    <p><b>Price:</b> ₦{product.price}</p>
                     <p><b>Description:</b> {product.description}</p>
                 </div>
                 <br/><br/>

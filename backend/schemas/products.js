@@ -15,6 +15,10 @@ const productSchema = new mongodb.Schema({
     image: {
         type: String,
         required: true
+    },
+    retailer: {
+        type: String,
+        required: true
     }
 })
 module.exports = { 
