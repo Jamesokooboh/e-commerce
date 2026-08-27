@@ -1,6 +1,7 @@
 node_modules
 .env
 images.env
+frontend/build/
 
 **/.terraform/
 **/*.tfstate

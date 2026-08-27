@@ -23,15 +23,18 @@ resource "aws_cloudfront_distribution" "static_site" {
     compress               = true
   }
 
+  # SPA routing: unknown paths (client-side routes like /cart) must fall
+  # through to index.html instead of a static error page, or refreshing on
+  # any route but "/" would break.
   custom_error_response {
     error_code         = 403
-    response_code      = 404
-    response_page_path = "/error.html"
+    response_code      = 200
+    response_page_path = "/index.html"
   }
   custom_error_response {
     error_code         = 404
-    response_code      = 404
-    response_page_path = "/error.html"
+    response_code      = 200
+    response_page_path = "/index.html"
   }
 
   logging_config {
