@@ -102,6 +102,9 @@ app.post("/login", [
     }
     await login(req, res)
 })
+app.post("/logout", verifyToken, (req, res) => {
+    res.clearCookie("token", { httpOnly: true }).status(200).json(["Success", "You have logged out successfully"])
+})
 app.post("/products", verifyToken, checkRole("Retailer"), upload.single("image"), async (req, res) => {
     await addProduct(req, res)
 })

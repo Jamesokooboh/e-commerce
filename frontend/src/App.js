@@ -7,7 +7,20 @@ import Cart from "./Components/Cart"
 import Result from "./Components/Results"
 import AlertWrapper from "./Components/AlertWrapper"
 import Detail from "./Components/ProductInfo"
+import { useAlert } from "./AlertContext"
+import { BACKEND_URL } from "./config"
 export default function App(){
+    const { showAlert } = useAlert()
+    const handleLogout = () => {
+        fetch(`${BACKEND_URL}/logout`, {
+            method: "POST",
+            credentials: "include"
+        }).then((res) => res.json()).then((data) => {
+            showAlert(data[0], data[1])
+        }).catch(() => {
+            showAlert("Error", "Failed to log out. Please try again.")
+        })
+    }
     return (
         <div className="overflow-y-hidden h-[100vh]">
             <AlertWrapper />
@@ -21,6 +34,7 @@ export default function App(){
                 <Link to="/verify">
                     <button>Log In</button>
                 </Link>
+                <button onClick={handleLogout}>Log Out</button>
                 <Link to="/products">
                     <button>Add Product</button>
                 </Link>
