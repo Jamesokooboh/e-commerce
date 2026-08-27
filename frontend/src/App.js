@@ -31,20 +31,22 @@ export default function App(){
         <div className="min-h-screen bg-paper text-ink">
             <AlertWrapper />
             <header className="site-header">
-                <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-4">
-                    <Link to="/" className="font-display text-2xl font-semibold tracking-tight">
-                        Benomhub
-                    </Link>
+                <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-4">
+                    <div className="flex items-center justify-between gap-4">
+                        <Link to="/" className="font-display text-2xl font-semibold tracking-tight">
+                            Benomhub
+                        </Link>
+                        <div className="flex shrink-0 items-center gap-3">
+                            <Link to="/cart" className="btn-secondary">Cart</Link>
+                            <AccountMenu loggedIn={loggedIn} onLogout={handleLogout} />
+                        </div>
+                    </div>
                     <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
                         <Link to="/" className="nav-link">Shop</Link>
-                        <Link to="/my-products" className="nav-link">My Products</Link>
+                        {role === "Retailer" && <Link to="/my-products" className="nav-link">My Products</Link>}
                         {role === "Retailer" && <Link to="/products" className="nav-link">Sell an Item</Link>}
                         <Link to="/orders" className="nav-link">Orders</Link>
                     </nav>
-                    <div className="flex items-center gap-3">
-                        <Link to="/cart" className="btn-secondary">Cart</Link>
-                        <AccountMenu loggedIn={loggedIn} onLogout={handleLogout} />
-                    </div>
                 </div>
             </header>
             <main className="mx-auto max-w-6xl px-6 py-10">
