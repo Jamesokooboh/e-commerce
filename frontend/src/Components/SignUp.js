@@ -86,7 +86,7 @@ export default function Register() {
                                     return res.json()
                                 }).then((data) => {
                                     showAlert(data[0], data[1])
-                                    if (data[0] === "Success") login()
+                                    if (data[0] === "Success") login(data[2])
                                 }).catch((err) => {
                                     showAlert("Error", "An error occurred while signing you up. Please try again later.")
                                     console.log(err)

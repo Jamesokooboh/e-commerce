@@ -29,7 +29,7 @@ export default function Authorize(){
                 return res.json()
             }).then((data) => {
                 showAlert(data[0], data[1])
-                if (data[0] === "Success") login()
+                if (data[0] === "Success") login(data[2])
             }).catch((err) => {
                 showAlert("Error", "An error occured while logging you in. Please try again later.")
                 console.log(err)
