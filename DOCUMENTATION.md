@@ -172,6 +172,10 @@ SANs on one certificate, DNS-validated via Cloudflare (domain registered
 there, not Route 53 — Cloudflare Registrar can't delegate nameservers
 elsewhere, so DNS stays on Cloudflare directly).
 
+Annotated diagram of this topology (request path, resource IDs, and the
+reasoning behind each infra decision): [Benomhub Infrastructure](https://claude.ai/code/artifact/2d6c6248-f75e-4ea9-923c-66e09c4ce135).
+Current as of 2026-08-27.
+
 ## 7. Real bugs found and fixed while dogfooding the live app
 
 These were found by testing every user flow end-to-end against the deployed
