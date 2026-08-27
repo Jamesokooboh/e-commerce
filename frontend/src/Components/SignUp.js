@@ -5,7 +5,6 @@ import { useAuth } from "../AuthContext"
 import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google"
 import { BACKEND_URL } from "../config"
 export default function Register() {
-    const [name, setName] = useState("")
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
     const [role, setRole] = useState("")
@@ -13,7 +12,7 @@ export default function Register() {
     const { login } = useAuth()
     const navigate = useNavigate()
     const verify = () => {
-        if (name === "" || email === "" || password === "" || role === "")
+        if (email === "" || password === "" || role === "")
             showAlert("Error", "Please fill up the details properly")
         else if (!email.includes("@") || !email.includes(".com"))
             showAlert("Error", "Please enter a valid email")
@@ -27,7 +26,7 @@ export default function Register() {
                     "Content-type": "application/json"
                 },
                 body: JSON.stringify({
-                    name: name,
+                    name: email.split("@")[0],
                     email: email,
                     role: role,
                     password: password
@@ -35,14 +34,33 @@ export default function Register() {
             }).then((res) => {
                 return res.json()
             }).then((data) => {
-                showAlert(data[0], data[1])
-                if (data[0] === "Success") {
-                    setName("")
-                    setEmail("")
-                    setPassword("")
-                    setRole("")
-                    navigate("/")
+                if (data[0] !== "Success") {
+                    showAlert(data[0], data[1])
+                    return null
                 }
+                // Signup only creates the account -- log the user in right
+                // away with the same credentials so they land in an
+                // authenticated session instead of back at a login form.
+                return fetch(`${BACKEND_URL}/login`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: {
+                        "Content-type": "application/json"
+                    },
+                    body: JSON.stringify({ email, password })
+                }).then((res) => {
+                    return res.json()
+                }).then((loginData) => {
+                    showAlert("Success", "You have signed up successfully")
+                    if (loginData[0] === "Success") {
+                        login(loginData[2])
+                        setEmail("")
+                        setPassword("")
+                        setRole("")
+                        navigate("/")
+                    }
+                    return null
+                })
             }).catch((err) => {
                 showAlert("Error", "An error occured while signing you up. Please try again later.")
                 console.log(err)
@@ -54,7 +72,6 @@ export default function Register() {
             <span className="eyebrow">Join Benomhub</span>
             <h1 className="mb-6 mt-1 font-display text-2xl font-semibold">Sign Up</h1>
             <div className="flex flex-col gap-4">
-                <input type="text" value={name} placeholder="Enter your name" onChange={(e) => setName(e.target.value)} className="field" />
                 <input type="email" value={email} placeholder="Enter your e-mail" onChange={(e) => setEmail(e.target.value)} className="field" />
                 <input type="password" value={password} placeholder="Enter your password" onChange={(e) => setPassword(e.target.value)} className="field" />
                 <select value={role} onChange={(e) => setRole(e.target.value)} className="field">
