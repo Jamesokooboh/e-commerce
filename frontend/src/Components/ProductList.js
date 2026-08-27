@@ -57,7 +57,7 @@ export default function ProductList() {
                     <div className="border border-black p-4 rounded-lg shadow-md w-[300px]" key={index}>
                         <img src={product.image} height={200} width={200} className="pimg"  onClick={() => { navigate(`/${product._id}`) }}/>
                         <h3>{product.name}</h3>
-                        <p>Price: ₹{product.price}</p>
+                        <p>Price: ₦{product.price}</p>
                         <button 
                             className="p-1 w-[150px] rounded-[7px] bg-black text-white" 
                             onClick={ () => {

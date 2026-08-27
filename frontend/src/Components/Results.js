@@ -38,7 +38,7 @@ export default function Result() {
                         <img src={product.image} className="cimg" alt={product.name} />
                         <div className="pinfo">
                             <h3>{product.name}</h3>
-                            <p className="price">Price: ₹{product.price}</p>
+                            <p className="price">Price: ₦{product.price}</p>
                             <p className="description">{product.description}</p>
                         </div>
                         <div className="a2cBtn">

@@ -112,7 +112,7 @@ export default function MyProducts() {
                             ) : (
                                 <div className="pinfo">
                                     <h3>{product.name}</h3>
-                                    <p className="price">Price: {product.price}</p>
+                                    <p className="price">Price: ₦{product.price}</p>
                                     <p className="description">Description: {product.description}</p>
                                     <div className="a2cBtn">
                                         <button
