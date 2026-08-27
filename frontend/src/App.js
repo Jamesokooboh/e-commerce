@@ -15,7 +15,7 @@ import { useAuth } from "./AuthContext"
 import { BACKEND_URL } from "./config"
 export default function App(){
     const { showAlert } = useAlert()
-    const { loggedIn, logout } = useAuth()
+    const { loggedIn, role, logout } = useAuth()
     const handleLogout = () => {
         fetch(`${BACKEND_URL}/logout`, {
             method: "POST",
@@ -38,7 +38,7 @@ export default function App(){
                     <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
                         <Link to="/" className="nav-link">Shop</Link>
                         <Link to="/my-products" className="nav-link">My Products</Link>
-                        <Link to="/products" className="nav-link">Sell an Item</Link>
+                        {role === "Retailer" && <Link to="/products" className="nav-link">Sell an Item</Link>}
                         <Link to="/orders" className="nav-link">Orders</Link>
                     </nav>
                     <div className="flex items-center gap-3">

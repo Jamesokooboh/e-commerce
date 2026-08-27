@@ -34,7 +34,7 @@ const login = async (req, res) => {
     if (match) {
         res.status(200).cookie("token", token, {
             httpOnly: true
-        }).json(["Success", "You have logged in successfully"])
+        }).json(["Success", "You have logged in successfully", user.role])
     } else {
         res.status(400).json(["Error", "Invalid credentials"])
     }
@@ -49,8 +49,10 @@ const oauth = async (req, res) => {
         const payload = ticket.getPayload()
         const user = await users.findOne({ email: payload.email })
         let newToken
+        let role
         if (user) {
             newToken = generateToken(user)
+            role = user.role
         } else {
             // Google's ID token never includes a password, but the schema
             // requires one -- a random unusable hash keeps the schema
@@ -67,10 +69,11 @@ const oauth = async (req, res) => {
             })
             await newUser.save()
             newToken = generateToken(newUser)
+            role = newUser.role
         }
         res.status(200).cookie("token", newToken, {
             httpOnly: true
-        }).json(["Success", "You have logged in successfully"])
+        }).json(["Success", "You have logged in successfully", role])
     } catch (error) {
         console.log(error)
         res.status(401).json(["Error", "Google sign-in failed. Please try again."])
