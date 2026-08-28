@@ -34,15 +34,27 @@ export default function AdminReview() {
         })
     }
 
+    const deleteProduct = (id) => {
+        fetch(`${BACKEND_URL}/products/${id}`, {
+            method: "DELETE",
+            credentials: "include"
+        }).then((res) => res.json()).then((data) => {
+            showAlert(data[0], data[1])
+            loadPending()
+        }).catch(() => {
+            showAlert("Error", "Failed to delete product")
+        })
+    }
+
     return (
         <div className="flex flex-col gap-8">
             <div>
                 <span className="eyebrow">Admin</span>
-                <h1 className="font-display text-3xl font-semibold">Review Queue</h1>
-                <p className="mt-2 max-w-xl text-muted">Products listed here are hidden from Consumers until you approve them.</p>
+                <h1 className="font-display text-3xl font-semibold">Manage Products</h1>
+                <p className="mt-2 max-w-xl text-muted">Approve or reject pending listings, or delete any product.</p>
             </div>
             {products.length === 0 ? (
-                <p className="text-muted">Nothing pending review.</p>
+                <p className="text-muted">No products yet.</p>
             ) : (
                 <div className="flex flex-col gap-4">
                     {products.map((product) => (
@@ -54,15 +66,24 @@ export default function AdminReview() {
                                 <p className="text-sm text-muted">{product.description}</p>
                                 <p className="text-xs text-muted">Listed by {product.retailer}</p>
                                 <div className="mt-auto flex gap-2 pt-2">
-                                    <button
-                                        className="btn-primary"
-                                        onClick={() => review(product._id, "approved")}>
-                                        Approve
-                                    </button>
+                                    {product.status === "pending" && (
+                                        <>
+                                            <button
+                                                className="btn-primary"
+                                                onClick={() => review(product._id, "approved")}>
+                                                Approve
+                                            </button>
+                                            <button
+                                                className="btn-outline"
+                                                onClick={() => review(product._id, "rejected")}>
+                                                Reject
+                                            </button>
+                                        </>
+                                    )}
                                     <button
                                         className="btn-outline"
-                                        onClick={() => review(product._id, "rejected")}>
-                                        Reject
+                                        onClick={() => deleteProduct(product._id)}>
+                                        Delete
                                     </button>
                                 </div>
                             </div>

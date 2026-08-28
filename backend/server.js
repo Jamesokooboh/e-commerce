@@ -113,7 +113,7 @@ app.post("/logout", verifyToken, (req, res) => {
 app.put("/profile/role", verifyToken, async (req, res) => {
     await switchRole(req, res)
 })
-app.post("/products", verifyToken, checkRole("Retailer"), upload.single("image"), async (req, res) => {
+app.post("/products", verifyToken, checkRole("Retailer", "Admin"), upload.single("image"), async (req, res) => {
     await addProduct(req, res)
 })
 app.get("/products", async (req, res) => {
@@ -125,7 +125,7 @@ app.get("/my-products", verifyToken, checkRole("Retailer"), async (req, res) => 
 app.put("/products/:id", verifyToken, checkRole("Retailer"), upload.single("image"), async (req, res) => {
     await editProduct(req, res)
 })
-app.delete("/products/:id", verifyToken, checkRole("Retailer"), async (req, res) => {
+app.delete("/products/:id", verifyToken, checkRole("Retailer", "Admin"), async (req, res) => {
     await deleteProduct(req, res)
 })
 app.get("/admin/products", verifyToken, checkRole("Admin"), async (req, res) => {
