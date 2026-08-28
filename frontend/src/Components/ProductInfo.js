@@ -1,15 +1,18 @@
 import { useParams } from "react-router"
 import { useEffect, useState } from "react"
-import Alert from "./Alert"
 import { useAlert } from "../AlertContext"
+import { useAuth } from "../AuthContext"
+import { BACKEND_URL } from "../config"
 export default function Detail(){
     const { id } = useParams()
     const { showAlert } = useAlert()
+    const { role } = useAuth()
+    const isRetailer = role === "Retailer"
     const [product, setProduct] = useState({})
     const [review, setReview] = useState("")
     const [comments, setComments] = useState([])
     useEffect(() => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/${id}`, {
+        fetch(`${BACKEND_URL}/${id}`, {
             method: "GET",
             headers: {
                 "Content-type": "Application/json"
@@ -23,7 +26,7 @@ export default function Detail(){
         })
     }, [id])
     const addToCart = async () => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/cart`, {
+        fetch(`${BACKEND_URL}/cart`, {
             method: "POST",
             credentials: "include",
             headers: {
@@ -31,11 +34,11 @@ export default function Detail(){
             },
             body: JSON.stringify({
                 cartItem: [{
-                    image: product.image, 
-                    name: product.name, 
-                    price: product.price, 
+                    image: product.image,
+                    name: product.name,
+                    price: product.price,
                     description: product.description
-                }] 
+                }]
             })
         }).then((res) => {
             return res.json()
@@ -46,11 +49,47 @@ export default function Detail(){
             console.log(err)
         })
     }
+    const buyNow = async () => {
+        fetch(`${BACKEND_URL}/checkout`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-type": "application/json",
+            },
+            body: JSON.stringify({
+                name: product.name,
+                price: product.price,
+                description: product.description,
+                image: product.image
+            })
+        }).then((res) => {
+            return res.json()
+        }).then((data) => {
+            showAlert(data[0], data[1])
+        }).catch((err) => {
+            showAlert("Error", "Failed to place order")
+            console.log(err)
+        })
+    }
+    const loadComments = () => {
+        fetch(`${BACKEND_URL}/reviews?name=${encodeURIComponent(product.name)}`, {
+            method: "GET",
+            headers: {
+                "Content-type": "application/json"
+            }
+        }).then((res) => {
+            return res.json()
+        }).then((data) => {
+            setComments(data)
+        }).catch((error) => {
+            console.log(error)
+        })
+    }
     const postReview = (name) => {
         if (review.length === 0){
             showAlert("Error", "Cannot post the empty comments")
         } else {
-            fetch(`${process.env.REACT_APP_BACKEND_URL}/reviews`, {
+            fetch(`${BACKEND_URL}/reviews`, {
                 method: "POST",
                 headers: {
                     "Content-type": "application/json"
@@ -64,73 +103,72 @@ export default function Detail(){
                 return res.json()
             }).then((data) => {
                 showAlert(data[0], data[1])
+                if (data[0] === "Success") {
+                    setReview("")
+                    loadComments()
+                }
             }).catch((error) => {
                 console.log(error)
-            })   
+            })
         }
     }
     useEffect(() => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/reviews?name=${encodeURIComponent(product.name)}`, {
-            method: "GET",
-            headers: {
-                "Content-type": "application/json"
-            }
-        }).then((res) => {
-            return res.json()
-        }).then((data) => {
-            setComments(data)
-        }).catch((error) => {
-            console.log(error)
-        })
+        loadComments()
     }, [product])
     return (
-        <div className="body">
-            <div>
-                <h1>{product.name}</h1>
-                <img src={product.image} className="productImg"/>
-                <div className="productInfo">
-                    <p><b>Price:</b> ₹{product.price}</p>
-                    <p><b>Description:</b> {product.description}</p>
+        <div className="flex flex-col gap-12">
+            <div className="grid gap-10 md:grid-cols-2">
+                <div className="aspect-square overflow-hidden rounded-2xl border border-line bg-accent-soft">
+                    <img src={product.image} alt={product.name} className="h-full w-full object-cover" />
                 </div>
-                <br/><br/>
-                <button 
-                    className="p-1 w-[150px] rounded-[7px] bg-black text-white" 
-                    onClick={async() => {
-                        await addToCart(product)
-                    }}>
-                    Add to Cart
-                </button>
-                <button className="p-1 w-[150px] rounded-[7px] bg-black text-white">Buy Now</button>
-                <br/><br/>
+                <div className="flex flex-col gap-4">
+                    <h1 className="font-display text-3xl font-semibold">{product.name}</h1>
+                    <p className="price text-2xl text-accent-ink">₦{product.price}</p>
+                    <p className="text-muted">{product.description}</p>
+                    {!isRetailer && (
+                        <div className="mt-4 flex gap-3">
+                            <button
+                                className="btn-secondary flex-1"
+                                onClick={async() => {
+                                    await addToCart(product)
+                                }}>
+                                Add to Cart
+                            </button>
+                            <button
+                                className="btn-primary flex-1"
+                                onClick={buyNow}>
+                                Buy Now
+                            </button>
+                        </div>
+                    )}
+                </div>
             </div>
-            <div>
-                <br/><br/>
-                <h1>Reviews</h1>
-                <textarea placeholder="Write your comment/s about the product here..." onChange={(e) => setReview(e.target.value)}></textarea>
-                <br/><br/>
-                <button 
-                    className="p-1 w-[150px] rounded-[7px] bg-black text-white" 
+            <div className="flex flex-col gap-5 border-t border-line pt-10">
+                <h2 className="font-display text-xl font-semibold">Reviews</h2>
+                <textarea
+                    placeholder="Write your comment/s about the product here..."
+                    value={review}
+                    onChange={(e) => setReview(e.target.value)}
+                    className="field h-28 resize-none" />
+                <button
+                    className="btn-primary self-start"
                     onClick={() => {
                         postReview(product.name)
                     }}>
-                    Comment
+                    Post Review
                 </button>
-                <h2>See the reviews from our other customers who bought the same product</h2>
-                {comments.map((review, index) => (
-                    <div key={index} className="comments">
-                        <h3>{review.name}</h3>
-                        <br/>
-                        <p>{review.comment}</p>
-                    </div>
-                ))}
+                <h3 className="text-sm text-muted">See the reviews from our other customers who bought the same product</h3>
+                <div className="flex flex-col gap-4">
+                    {comments.length === 0 ? (
+                        <p className="text-muted">No reviews yet — be the first to leave one.</p>
+                    ) : comments.map((review, index) => (
+                        <div key={index} className="card p-4">
+                            <h3 className="font-medium">{review.name}</h3>
+                            <p className="mt-1 text-muted">{review.comment}</p>
+                        </div>
+                    ))}
+                </div>
             </div>
-            {alert.length > 0 && 
-            <Alert 
-                heading = { alert[0] } 
-                message = { alert[1] } 
-                onClose = { () => {
-                    showAlert("", "")
-                }}/>}
         </div>
     )
 }

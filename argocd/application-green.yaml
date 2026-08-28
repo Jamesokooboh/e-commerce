@@ -1,0 +1,56 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ecommerce-green
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Jamesokooboh/e-commerce.git
+    targetRevision: feature/James-Okooboh
+    path: helm/ecommerce
+    helm:
+      valueFiles:
+        - values.yaml
+      parameters:
+        - name: namespace
+          value: green
+        - name: backend.image.repository
+          value: "313951301623.dkr.ecr.us-east-1.amazonaws.com/ecommerce-backend"
+        - name: backend.image.tag
+          value: "latest"
+        - name: frontend.image.repository
+          value: "313951301623.dkr.ecr.us-east-1.amazonaws.com/ecommerce-frontend"
+        - name: frontend.image.tag
+          value: "latest"
+        - name: backend.nodePort
+          value: "30051"
+        - name: frontend.nodePort
+          value: "30081"
+        - name: config.backendUrl
+          value: "http://eks-ecommerce-alb-1390046606.us-east-1.elb.amazonaws.com:5000"
+        - name: config.frontendUrl
+          value: "http://eks-ecommerce-alb-1390046606.us-east-1.elb.amazonaws.com"
+        - name: mongo.storageClassName
+          value: "gp2"
+        - name: ingress.enabled
+          value: "false"
+        - name: hpa.enabled
+          value: "false"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: green
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+  # JWT_SECRET is managed live in-cluster (kubectl apply, never committed to
+  # git) - tell ArgoCD not to revert it back to the chart's placeholder value.
+  ignoreDifferences:
+    - group: ""
+      kind: Secret
+      name: ecommerce-secrets
+      jsonPointers:
+        - /stringData/JWT_SECRET

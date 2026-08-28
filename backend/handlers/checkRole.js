@@ -1,6 +1,6 @@
-module.exports = checkRole = (role) => {
+module.exports = checkRole = (...roles) => {
     return (req, res, next) => {
-        if (req.user.role !== role){
+        if (!roles.includes(req.user.role)){
             return res.status(403).json(["Error", "Access denied"])
         }
         next()

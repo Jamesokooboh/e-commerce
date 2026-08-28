@@ -1,11 +1,11 @@
-import Alert from "./Alert"
 import { useEffect, useState } from "react"
 import { useAlert } from "../AlertContext"
+import { BACKEND_URL } from "../config"
 export default function Cart() {
     const [cart, setCart] = useState([])
     const { showAlert } = useAlert()
-    useEffect(() => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/cart`, {
+    const loadCart = () => {
+        fetch(`${BACKEND_URL}/cart`, {
             method: "GET",
             credentials: "include",
             headers: {
@@ -23,9 +23,37 @@ export default function Cart() {
             console.log(err)
             showAlert("Error", "Failed to fetch cart items")
         })
+    }
+    useEffect(() => {
+        loadCart()
     }, [])
+    const increaseQuantity = (item) => {
+        fetch(`${BACKEND_URL}/cart`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-type": "application/json",
+            },
+            body: JSON.stringify({
+                cartItem: [{
+                    image: item.image,
+                    name: item.name,
+                    price: item.price,
+                    description: item.description
+                }]
+            })
+        }).then((res) => {
+            return res.json()
+        }).then((data) => {
+            showAlert(data[0], data[1])
+            loadCart()
+        }).catch((err) => {
+            showAlert("Error", "Failed to update quantity")
+            console.log(err)
+        })
+    }
     const removeItem = (item) => {
-        fetch(`${process.env.REACT_APP_BACKEND_URL}/cart`, {
+        fetch(`${BACKEND_URL}/cart`, {
             method: "DELETE",
             credentials: "include",
             headers: {
@@ -43,48 +71,94 @@ export default function Cart() {
             return res.json()
         }).then((data) => {
             showAlert(data[0], data[1])
+            loadCart()
         }).catch((err) => {
             console.log(err)
         })
     }
+    const buyNow = (item) => {
+        fetch(`${BACKEND_URL}/checkout`, {
+            method: "POST",
+            credentials: "include",
+            headers: {
+                "Content-type": "application/json",
+            },
+            body: JSON.stringify({
+                name: item.name,
+                price: item.price,
+                description: item.description,
+                image: item.image
+            })
+        }).then((res) => res.json()).then((data) => {
+            // A purchased item shouldn't linger in the cart -- remove it,
+            // then refresh so the list reflects both changes at once.
+            fetch(`${BACKEND_URL}/cart`, {
+                method: "DELETE",
+                credentials: "include",
+                headers: { "Content-type": "application/json" },
+                body: JSON.stringify({ cartItem: [item] })
+            }).then(() => {
+                showAlert(data[0], data[1])
+                loadCart()
+            })
+        }).catch((err) => {
+            showAlert("Error", "Failed to place order")
+            console.log(err)
+        })
+    }
+    // Cart documents can persist with an empty cartItem array (e.g. after
+    // removing the last item) -- item.cartItem[0] must be filtered out
+    // first, or rendering it throws and blanks the whole page.
+    const items = cart.filter((item) => item.cartItem && item.cartItem.length > 0)
     return (
-        <div className="body">
-            <h1>Cart Items</h1>
-            {cart.length === 0 ? (
-                <h2>Your cart is empty</h2>
-            ) : (<>
-                <h2>Here are the products you added to cart:</h2>
-                <div className="clist">
-                    {cart.map((item, index) => (
-                        <div key={index} className="icard">
-                            <img src={item.cartItem[0].image} className="cimg" />
-                            <div className="pinfo">
-                                <h3>{item.cartItem[0].name}</h3>
-                                <p className="price">Price: {item.cartItem[0].price}</p>
-                                <p className="description">Description: {item.cartItem[0].description}</p>
+        <div className="flex flex-col gap-8">
+            <div>
+                <span className="eyebrow">Your bag</span>
+                <h1 className="font-display text-3xl font-semibold">Cart</h1>
+            </div>
+            {items.length === 0 ? (
+                <p className="text-muted">Your cart is empty.</p>
+            ) : (
+                <div className="flex flex-col gap-4">
+                    {items.map((item, index) => (
+                        <div key={index} className="card flex flex-col gap-5 p-4 sm:flex-row sm:items-center">
+                            <img src={item.cartItem[0].image} alt={item.cartItem[0].name} className="h-28 w-28 shrink-0 rounded-xl object-cover" />
+                            <div className="flex-1">
+                                <h3 className="font-display font-medium">{item.cartItem[0].name}</h3>
+                                <p className="price text-accent-ink">₦{item.cartItem[0].price}</p>
+                                <p className="text-sm text-muted">{item.cartItem[0].description}</p>
+                                <div className="mt-2 flex items-center gap-2">
+                                    <span className="price text-sm text-muted">Qty: {item.cartItem[0].quantity || 1}</span>
+                                    <button
+                                        aria-label="Increase quantity"
+                                        className="flex h-6 w-6 items-center justify-center rounded-full border border-line text-sm leading-none hover:border-accent2"
+                                        onClick={() => {
+                                            increaseQuantity(item.cartItem[0])
+                                        }}>
+                                        +
+                                    </button>
+                                </div>
                             </div>
-                            <div className="a2cBtn">
-                                <button className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]">Buy Now</button>
-                                <button 
-                                    className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]" 
+                            <div className="flex shrink-0 gap-2">
+                                <button
+                                    className="btn-primary"
+                                    onClick={() => {
+                                        buyNow(item.cartItem[0])
+                                    }}>
+                                    Buy Now
+                                </button>
+                                <button
+                                    className="btn-secondary"
                                     onClick={() => {
                                         removeItem(item.cartItem[0])
                                     }}>
-                                    Remove Item
-                                    </button>
+                                    Remove
+                                </button>
                             </div>
                         </div>
                     ))}
                 </div>
-            </>)}
-            {alert.length > 0 && 
-            <Alert 
-                heading={alert[0]} 
-                message={alert[1]} 
-                onClose={() => {
-                    showAlert("", "")
-                }}
-            />}
+            )}
         </div>
     )
 }

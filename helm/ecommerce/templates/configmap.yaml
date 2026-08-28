@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ecommerce-config
+  namespace: {{ .Values.namespace }}
+data:
+  MONGO_DATABASE: {{ .Values.config.mongoDatabase | quote }}
+  FRONTEND_URL: {{ .Values.config.frontendUrl | quote }}

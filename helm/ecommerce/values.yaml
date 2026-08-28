@@ -1,0 +1,58 @@
+namespace: ecommerce
+
+backend:
+  image:
+    repository: okoobohjames/ecommerce-backend
+    tag: latest
+  replicaCount: 2
+  containerPort: 5000
+  nodePort: 30050
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+frontend:
+  image:
+    repository: okoobohjames/ecommerce-frontend
+    tag: k8s
+  replicaCount: 3
+  containerPort: 8080
+  servicePort: 80
+  nodePort: 30080
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"
+
+mongo:
+  image: mongo:7
+  port: 27017
+  storageClassName: standard
+  storageSize: 1Gi
+
+config:
+  mongoDatabase: ecommerce
+  frontendUrl: "http://44.194.117.44:3000"
+  backendUrl: "http://44.194.117.44:5000"
+
+# Override at install time: --set secret.jwtSecret=<value>, never commit a real secret here.
+secret:
+  jwtSecret: "replace-with-a-long-random-secret"
+
+hpa:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 50
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ecommerce.local

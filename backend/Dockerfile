@@ -11,12 +11,15 @@ RUN npm install --omit=dev
 # Stage 2: Run the application
 FROM node:22-alpine AS runtime
 
+ARG BUILD_NUMBER=dev
 ENV NODE_ENV=production
+ENV BUILD_NUMBER=${BUILD_NUMBER}
 
 WORKDIR /app
 
 COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
 COPY --chown=node:node . .
+RUN mkdir -p handlers/images && chown node:node handlers/images
 
 USER node
 

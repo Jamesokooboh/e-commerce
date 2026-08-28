@@ -1,8 +1,8 @@
-import Alert from "./Alert"
 import { useAlert } from "../AlertContext"
 import { SearchContext } from "../SearchContext"
 import { useNavigate } from "react-router-dom"
 import { useState, useContext } from "react"
+import { BACKEND_URL } from "../config"
 export default function Search() {
     const [input, setInput] = useState("")
     const { setRes } = useContext(SearchContext)
@@ -11,9 +11,9 @@ export default function Search() {
     const handleSearch = () => {
         navigate("/searchProducts")
         if (input === "" || input === null) {
-            showAlert(["Error", "Cannot search for an empty input"])
+            showAlert("Error", "Cannot search for an empty input")
         } else {
-            fetch(`${process.env.REACT_APP_BACKEND_URL}/searchProducts`, {
+            fetch(`${BACKEND_URL}/searchProducts`, {
                 method: "POST",
                 credentials: "include",
                 headers: {
@@ -35,23 +35,15 @@ export default function Search() {
         }
     }
     return (
-        <div className="sticky top-0 h-[10px] m-0 p-0 bg-none text-black">
-            <input 
-                type="search" 
-                placeholder="Search for products..."  
-                onChange={(e) => { setInput(e.target.value) }} className="mt-2.5 mr-2.5 p-1 border border-black rounded-[20px] w-[260px]" />
-            <button 
-                onClick={handleSearch}
-                className="p-1 w-[150px] rounded-[7px] bg-black text-white">
-                    Search
-            </button>
-            {alert.length > 0 
-                && <Alert 
-                    heading = { alert[0] } 
-                    message = { alert[1] }  
-                    onClose = { () => {
-                        showAlert("", "")
-                    }}/>}
+        <div className="flex max-w-xl gap-3">
+            <input
+                type="search"
+                value={input}
+                placeholder="Search for products..."
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                className="field" />
+            <button onClick={handleSearch} className="btn-primary shrink-0">Search</button>
         </div>
     )
 }

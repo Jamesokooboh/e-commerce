@@ -5,6 +5,7 @@ import App from "./App"
 import { HashRouter } from "react-router"
 import { SearchProvider } from "./SearchContext"
 import { AlertProvider } from "./AlertContext"
+import { AuthProvider } from "./AuthContext"
 const main = document.getElementById("root")
 const root = ReactDOM.createRoot(main)
 root.render(
@@ -12,9 +13,11 @@ root.render(
         <React.StrictMode>
             <SearchProvider>
                 <AlertProvider>
-                    <div className="min-h-screen w-full overflow-x-hidden overflow-y-auto font['Roboto'] text-black bg-white">
-                        <App/>
-                    </div>
+                    <AuthProvider>
+                        <div className="min-h-screen w-full overflow-x-hidden bg-paper font-sans text-ink">
+                            <App/>
+                        </div>
+                    </AuthProvider>
                 </AlertProvider>
             </SearchProvider>
         </React.StrictMode>
