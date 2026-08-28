@@ -8,16 +8,13 @@ module.exports = async (req, res) => {
     try {
         const safeSearch = escapeRegex(search || "")
         const products = await productModel.find({
-            $or: [{
-                name: {
-                    $regex: safeSearch,
-                    $options: "i"
-                }}, {
-                description: {
-                    $regex: safeSearch,
-                    $options: "i"
-                }
-            }]
+            $and: [
+                { $or: [{ status: "approved" }, { status: { $exists: false } }] },
+                { $or: [
+                    { name: { $regex: safeSearch, $options: "i" } },
+                    { description: { $regex: safeSearch, $options: "i" } }
+                ] }
+            ]
         })
         res.json(products)
     } catch (error) {

@@ -11,6 +11,7 @@ import AlertWrapper from "./Components/AlertWrapper"
 import Detail from "./Components/ProductInfo"
 import AccountMenu from "./Components/AccountMenu"
 import Profile from "./Components/Profile"
+import AdminReview from "./Components/AdminReview"
 import { useAlert } from "./AlertContext"
 import { useAuth } from "./AuthContext"
 import { BACKEND_URL } from "./config"
@@ -18,6 +19,7 @@ export default function App(){
     const { showAlert } = useAlert()
     const { loggedIn, role, logout } = useAuth()
     const isRetailer = role === "Retailer"
+    const isAdmin = role === "Admin"
     const handleLogout = () => {
         fetch(`${BACKEND_URL}/logout`, {
             method: "POST",
@@ -39,12 +41,14 @@ export default function App(){
                             Benomhub
                         </Link>
                         <div className="flex shrink-0 items-center gap-3">
-                            {!isRetailer && <Link to="/cart" className="btn-secondary">Cart</Link>}
+                            {!isRetailer && !isAdmin && <Link to="/cart" className="btn-secondary">Cart</Link>}
                             <AccountMenu loggedIn={loggedIn} onLogout={handleLogout} />
                         </div>
                     </div>
                     <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
-                        {isRetailer ? (
+                        {isAdmin ? (
+                            <Link to="/admin" className="nav-link">Review Queue</Link>
+                        ) : isRetailer ? (
                             <>
                                 <Link to="/my-products" className="nav-link">My Products</Link>
                                 <Link to="/products" className="nav-link">Sell an Item</Link>
@@ -55,7 +59,7 @@ export default function App(){
                                 <Link to="/orders" className="nav-link">Orders</Link>
                             </>
                         )}
-                        {loggedIn && <Link to="/profile" className="nav-link">Profile</Link>}
+                        {loggedIn && !isAdmin && <Link to="/profile" className="nav-link">Profile</Link>}
                     </nav>
                 </div>
             </header>
@@ -66,6 +70,7 @@ export default function App(){
                     <Route path="/products" element={<ProductForm/>}/>
                     <Route path="/my-products" element={<MyProducts/>}/>
                     <Route path="/profile" element={<Profile/>}/>
+                    <Route path="/admin" element={<AdminReview/>}/>
                     <Route path="/" element={<ProductList/>}/>
                     <Route path="/cart" element={<Cart/>}/>
                     <Route path="/orders" element={<Orders/>}/>
