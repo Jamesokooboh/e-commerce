@@ -5,7 +5,7 @@ const client = new OAuth2Client(process.env.CLIENT_ID)
 const { generateToken } = require("./jwts")
 const signup = async (req, res) => {
     const salt = 10
-    const { name, email, role, password } = req.body
+    const { name, email, password } = req.body
     try{
         hashed = await bcrypt.hash(password, salt)
     } catch (error) {
@@ -14,7 +14,9 @@ const signup = async (req, res) => {
     const User = new users({
         name: name,
         email: email,
-        role: role,
+        // Role is no longer chosen at signup -- everyone starts as a
+        // Consumer and switches to Retailer later from their profile.
+        role: "Consumer",
         password: hashed
     })
     const find = await users.findOne({ email: email })

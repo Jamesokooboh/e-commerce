@@ -7,12 +7,11 @@ import { BACKEND_URL } from "../config"
 export default function Register() {
     const [email, setEmail] = useState("")
     const [password, setPassword] = useState("")
-    const [role, setRole] = useState("")
     const { showAlert } = useAlert()
     const { login } = useAuth()
     const navigate = useNavigate()
     const verify = () => {
-        if (email === "" || password === "" || role === "")
+        if (email === "" || password === "")
             showAlert("Error", "Please fill up the details properly")
         else if (!email.includes("@") || !email.includes(".com"))
             showAlert("Error", "Please enter a valid email")
@@ -28,7 +27,6 @@ export default function Register() {
                 body: JSON.stringify({
                     name: email.split("@")[0],
                     email: email,
-                    role: role,
                     password: password
                 })
             }).then((res) => {
@@ -56,7 +54,6 @@ export default function Register() {
                         login(loginData[2])
                         setEmail("")
                         setPassword("")
-                        setRole("")
                         navigate("/")
                     }
                     return null
@@ -74,11 +71,6 @@ export default function Register() {
             <div className="flex flex-col gap-4">
                 <input type="email" value={email} placeholder="Enter your e-mail" onChange={(e) => setEmail(e.target.value)} className="field" />
                 <input type="password" value={password} placeholder="Enter your password" onChange={(e) => setPassword(e.target.value)} className="field" />
-                <select value={role} onChange={(e) => setRole(e.target.value)} className="field">
-                    <option value="">Register as...</option>
-                    <option>Consumer</option>
-                    <option>Retailer</option>
-                </select>
                 <button onClick={verify} className="btn-primary mt-2">Sign Up</button>
             </div>
             <p className="mt-5 text-center text-sm text-muted">
