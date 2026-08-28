@@ -23,6 +23,15 @@ const productSchema = new mongodb.Schema({
     // Mongoose validates cart sub-documents against this same schema.
     retailer: {
         type: String
+    },
+    // Not required for the same cart-sub-document reason as `retailer`
+    // above -- defaults to "pending" so newly listed products need
+    // admin approval before showListProducts (the consumer-facing feed)
+    // will return them.
+    status: {
+        type: String,
+        enum: ["pending", "approved", "rejected"],
+        default: "pending"
     }
 })
 module.exports = { 

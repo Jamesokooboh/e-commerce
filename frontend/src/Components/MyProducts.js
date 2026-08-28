@@ -112,7 +112,16 @@ export default function MyProducts() {
                                 </div>
                             ) : (
                                 <div className="flex flex-1 flex-col gap-2">
-                                    <h3 className="font-display font-medium">{product.name}</h3>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="font-display font-medium">{product.name}</h3>
+                                        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide ${
+                                            product.status === "rejected" ? "bg-red-50 text-red-600" :
+                                            product.status === "pending" ? "bg-accent-soft text-accent-ink" :
+                                            "bg-accent2-soft text-accent2-ink"
+                                        }`}>
+                                            {product.status || "approved"}
+                                        </span>
+                                    </div>
                                     <p className="price text-accent-ink">₦{product.price}</p>
                                     <p className="text-sm text-muted">{product.description}</p>
                                     <div className="mt-auto flex gap-2 pt-2">

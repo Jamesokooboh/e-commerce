@@ -30,6 +30,8 @@ const showReview = require("./handlers/showReview")
 const mail = require("./handlers/mail")
 const checkout = require("./handlers/checkout")
 const showOrders = require("./handlers/showOrders")
+const listPendingProducts = require("./handlers/listPendingProducts")
+const reviewProduct = require("./handlers/reviewProduct")
 const app = express()
 require("dotenv").config()
 const allowedOrigins = (process.env.REACT_APP_FRONTEND_URL || "").split(",").map((origin) => origin.trim())
@@ -125,6 +127,12 @@ app.put("/products/:id", verifyToken, checkRole("Retailer"), upload.single("imag
 })
 app.delete("/products/:id", verifyToken, checkRole("Retailer"), async (req, res) => {
     await deleteProduct(req, res)
+})
+app.get("/admin/products", verifyToken, checkRole("Admin"), async (req, res) => {
+    await listPendingProducts(req, res)
+})
+app.put("/admin/products/:id", verifyToken, checkRole("Admin"), async (req, res) => {
+    await reviewProduct(req, res)
 })
 app.post("/cart", verifyToken, checkRole("Consumer"), async (req, res) => {
     await addToCart(req, res)

@@ -13,6 +13,10 @@ module.exports = editProduct = async (req, res) => {
         if (price) product.price = price
         if (description) product.description = description
         if (req.file) product.image = `${process.env.REACT_APP_BACKEND_URL}/images/${req.file.filename}`
+        // Any edit changes what was actually approved -- send it back to
+        // the review queue rather than letting an edited listing stay
+        // live under its old approval.
+        product.status = "pending"
         await product.save()
         res.status(200).json(["Success", "Product updated successfully"])
     } catch (error) {
