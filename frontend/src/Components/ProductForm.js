@@ -6,9 +6,12 @@ export default function ProductForm() {
     const [price, setPrice] = useState("")
     const [description, setDescription] = useState("")
     const [image, setImage] = useState(null)
+    const [submitting, setSubmitting] = useState(false)
     const { showAlert } = useAlert()
     const handleSubmit = async (e) => {
         e.preventDefault()
+        if (submitting) return
+        setSubmitting(true)
         const formData = new FormData()
         formData.append("name", name)
         formData.append("price", price)
@@ -25,6 +28,8 @@ export default function ProductForm() {
         }).catch((err) => {
             showAlert("Error", "An error occured while adding the product. Please try again later.")
             console.log(err)
+        }).finally(() => {
+            setSubmitting(false)
         })
     }
     return (
@@ -58,7 +63,9 @@ export default function ProductForm() {
                     accept="image/*"
                     onChange={(e) => { setImage(e.target.files[0]) }}
                     className="field file:mr-4 file:rounded-full file:border-0 file:bg-ink file:px-4 file:py-1.5 file:text-sm file:text-paper" />
-                <button type="submit" className="btn-primary mt-2">Add Product</button>
+                <button type="submit" className="btn-primary mt-2" disabled={submitting}>
+                    {submitting ? "Adding..." : "Add Product"}
+                </button>
             </form>
         </div>
     )
