@@ -21,6 +21,7 @@ const myProducts = require("./handlers/myProducts")
 const editProduct = require("./handlers/editProduct")
 const deleteProduct = require("./handlers/deleteProduct")
 const addToCart = require("./handlers/addToCart")
+const decreaseCart = require("./handlers/decreaseCart")
 const showCart = require("./handlers/showCart")
 const deleteCart = require("./handlers/deleteCart")
 const searchProducts = require("./handlers/searchProducts")
@@ -142,6 +143,9 @@ app.get("/cart", verifyToken, checkRole("Consumer"), async (req, res) => {
 })
 app.delete("/cart", verifyToken, checkRole("Consumer"), async (req, res) => {
     await deleteCart(req, res)
+})
+app.patch("/cart", verifyToken, checkRole("Consumer"), async (req, res) => {
+    await decreaseCart(req, res)
 })
 app.post("/checkout", verifyToken, checkRole("Consumer"), async (req, res) => {
     await checkout(req, res)
