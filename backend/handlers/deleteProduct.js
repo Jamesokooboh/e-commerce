@@ -5,7 +5,7 @@ module.exports = deleteProduct = async (req, res) => {
         if (!product) {
             return res.status(404).json(["Error", "Product not found"])
         }
-        if (product.retailer !== req.user.email) {
+        if (req.user.role !== "Admin" && product.retailer !== req.user.email) {
             return res.status(403).json(["Error", "You can only delete your own products"])
         }
         await product.deleteOne()

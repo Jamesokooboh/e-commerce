@@ -47,7 +47,10 @@ export default function App(){
                     </div>
                     <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
                         {isAdmin ? (
-                            <Link to="/admin" className="nav-link">Review Queue</Link>
+                            <>
+                                <Link to="/admin" className="nav-link">Manage Products</Link>
+                                <Link to="/products" className="nav-link">Add Product</Link>
+                            </>
                         ) : isRetailer ? (
                             <>
                                 <Link to="/my-products" className="nav-link">My Products</Link>
