@@ -49,8 +49,13 @@ aws cloudwatch put-metric-alarm --profile "$AWS_PROFILE" --region "$AWS_REGION" 
 
 aws logs put-metric-filter --profile "$AWS_PROFILE" --region "$AWS_REGION" \
   --log-group-name /ecommerce/k8s/pods --filter-name ecommerce-app-errors \
-  --filter-pattern '?ERROR ?Exception ?Failed ?" 5"' \
+  --filter-pattern '?ERROR ?Exception ?Failed ?"31m"' \
   --metric-transformations metricName=AppErrorCount,metricNamespace=EcommerceMonitoring,metricValue=1,defaultValue=0
+# The original pattern's `" 5"` term (meant to catch 5xx) matched as a plain substring,
+# not a status-code boundary -- it fired on the "- 52" byte-length field of every single
+# /health log line, latching this alarm in permanent false ALARM. "31m" is the ANSI color
+# code Morgan's dev-format logger wraps only around 5xx statuses (red), so it only matches
+# real server errors.
 
 aws cloudwatch put-metric-alarm --profile "$AWS_PROFILE" --region "$AWS_REGION" \
   --alarm-name ecommerce-app-errors --alarm-description "Error/Exception/Failed/5xx pattern in pod logs" \
