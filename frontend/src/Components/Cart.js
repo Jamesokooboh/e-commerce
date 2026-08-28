@@ -52,6 +52,31 @@ export default function Cart() {
             console.log(err)
         })
     }
+    const decreaseQuantity = (item) => {
+        fetch(`${BACKEND_URL}/cart`, {
+            method: "PATCH",
+            credentials: "include",
+            headers: {
+                "Content-type": "application/json",
+            },
+            body: JSON.stringify({
+                cartItem: [{
+                    image: item.image,
+                    name: item.name,
+                    price: item.price,
+                    description: item.description
+                }]
+            })
+        }).then((res) => {
+            return res.json()
+        }).then((data) => {
+            showAlert(data[0], data[1])
+            loadCart()
+        }).catch((err) => {
+            showAlert("Error", "Failed to update quantity")
+            console.log(err)
+        })
+    }
     const removeItem = (item) => {
         fetch(`${BACKEND_URL}/cart`, {
             method: "DELETE",
@@ -128,6 +153,14 @@ export default function Cart() {
                                 <p className="price text-accent-ink">₦{item.cartItem[0].price}</p>
                                 <p className="text-sm text-muted">{item.cartItem[0].description}</p>
                                 <div className="mt-2 flex items-center gap-2">
+                                    <button
+                                        aria-label="Decrease quantity"
+                                        className="flex h-6 w-6 items-center justify-center rounded-full border border-line text-sm leading-none hover:border-accent2"
+                                        onClick={() => {
+                                            decreaseQuantity(item.cartItem[0])
+                                        }}>
+                                        -
+                                    </button>
                                     <span className="price text-sm text-muted">Qty: {item.cartItem[0].quantity || 1}</span>
                                     <button
                                         aria-label="Increase quantity"
