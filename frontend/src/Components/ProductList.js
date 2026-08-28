@@ -2,10 +2,13 @@ import { useEffect, useState } from "react"
 import { useNavigate } from "react-router"
 import Search from "./Search"
 import { useAlert } from "../AlertContext"
+import { useAuth } from "../AuthContext"
 import { BACKEND_URL } from "../config"
 export default function ProductList() {
     const [products, setProducts] = useState([])
     const { showAlert } = useAlert()
+    const { role } = useAuth()
+    const isRetailer = role === "Retailer"
     const navigate = useNavigate()
     useEffect(() => {
         fetch(`${BACKEND_URL}/products`, {
@@ -91,18 +94,20 @@ export default function ProductList() {
                             <div className="flex flex-1 flex-col gap-2 p-5">
                                 <h3 className="font-display text-lg font-medium leading-snug">{product.name}</h3>
                                 <p className="price text-lg text-accent-ink">₦{product.price}</p>
-                                <div className="mt-auto flex gap-2 pt-3">
-                                    <button
-                                        className="btn-secondary flex-1"
-                                        onClick={() => addToCart(product)}>
-                                        Add to Cart
-                                    </button>
-                                    <button
-                                        className="btn-primary flex-1"
-                                        onClick={() => buyNow(product)}>
-                                        Buy Now
-                                    </button>
-                                </div>
+                                {!isRetailer && (
+                                    <div className="mt-auto flex gap-2 pt-3">
+                                        <button
+                                            className="btn-secondary flex-1"
+                                            onClick={() => addToCart(product)}>
+                                            Add to Cart
+                                        </button>
+                                        <button
+                                            className="btn-primary flex-1"
+                                            onClick={() => buyNow(product)}>
+                                            Buy Now
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </article>
                     ))}

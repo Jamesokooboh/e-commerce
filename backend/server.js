@@ -10,6 +10,7 @@ const { body, validationResult } = require("express-validator")
 const sanitize = require("express-mongo-sanitize")
 const compress = require("compression")
 const { signup, login, oauth } = require("./handlers/auth")
+const switchRole = require("./handlers/switchRole")
 const connect = require("./connect")
 const { verifyToken } = require("./handlers/jwts")
 const checkRole = require("./handlers/checkRole")
@@ -74,10 +75,9 @@ connect("ecommerce")
 app.post("/signup", [
     body("name").notEmpty().withMessage("Name is required"),
     body("email").isEmail().withMessage("Email is not valid"),
-    body("password").isLength({ 
-        min: 8 
-    }).withMessage("Password must be at least 8 characters long"),
-    body("role").notEmpty().withMessage("Role is required")
+    body("password").isLength({
+        min: 8
+    }).withMessage("Password must be at least 8 characters long")
 ], async (req, res) => {
     const errors = validationResult(req)
     if (!errors.isEmpty()) {
@@ -108,6 +108,9 @@ app.post("/login", [
 app.post("/logout", verifyToken, (req, res) => {
     res.clearCookie("token", { httpOnly: true }).status(200).json(["Success", "You have logged out successfully"])
 })
+app.put("/profile/role", verifyToken, async (req, res) => {
+    await switchRole(req, res)
+})
 app.post("/products", verifyToken, checkRole("Retailer"), upload.single("image"), async (req, res) => {
     await addProduct(req, res)
 })
@@ -123,16 +126,16 @@ app.put("/products/:id", verifyToken, checkRole("Retailer"), upload.single("imag
 app.delete("/products/:id", verifyToken, checkRole("Retailer"), async (req, res) => {
     await deleteProduct(req, res)
 })
-app.post("/cart", verifyToken, async (req, res) => {
+app.post("/cart", verifyToken, checkRole("Consumer"), async (req, res) => {
     await addToCart(req, res)
 })
-app.get("/cart", verifyToken, async (req, res) => {
+app.get("/cart", verifyToken, checkRole("Consumer"), async (req, res) => {
     await showCart(req, res)
 })
-app.delete("/cart", verifyToken, async (req, res) => {
+app.delete("/cart", verifyToken, checkRole("Consumer"), async (req, res) => {
     await deleteCart(req, res)
 })
-app.post("/checkout", verifyToken, async (req, res) => {
+app.post("/checkout", verifyToken, checkRole("Consumer"), async (req, res) => {
     await checkout(req, res)
 })
 app.get("/orders", verifyToken, async (req, res) => {

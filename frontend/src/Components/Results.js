@@ -1,10 +1,13 @@
 import { SearchContext } from "../SearchContext"
 import { useContext } from "react"
 import { useAlert } from "../AlertContext"
+import { useAuth } from "../AuthContext"
 import { BACKEND_URL } from "../config"
 export default function Result() {
     const { showAlert } = useAlert()
     const { res } = useContext(SearchContext)
+    const { role } = useAuth()
+    const isRetailer = role === "Retailer"
     const addToCart = (product) => {
         fetch(`${BACKEND_URL}/cart`, {
             method: "POST",
@@ -70,22 +73,24 @@ export default function Result() {
                                 <h3 className="font-display text-lg font-medium leading-snug">{product.name}</h3>
                                 <p className="price text-lg text-accent-ink">₦{product.price}</p>
                                 <p className="text-sm text-muted">{product.description}</p>
-                                <div className="mt-auto flex gap-2 pt-3">
-                                    <button
-                                        className="btn-secondary flex-1"
-                                        onClick={() => {
-                                            addToCart(product)
-                                        }} >
-                                        Add to Cart
-                                    </button>
-                                    <button
-                                        className="btn-primary flex-1"
-                                        onClick={() => {
-                                            buyNow(product)
-                                        }}>
-                                        Buy Now
-                                    </button>
-                                </div>
+                                {!isRetailer && (
+                                    <div className="mt-auto flex gap-2 pt-3">
+                                        <button
+                                            className="btn-secondary flex-1"
+                                            onClick={() => {
+                                                addToCart(product)
+                                            }} >
+                                            Add to Cart
+                                        </button>
+                                        <button
+                                            className="btn-primary flex-1"
+                                            onClick={() => {
+                                                buyNow(product)
+                                            }}>
+                                            Buy Now
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </article>
                     ))}

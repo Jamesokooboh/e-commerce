@@ -1,10 +1,13 @@
 import { useParams } from "react-router"
 import { useEffect, useState } from "react"
 import { useAlert } from "../AlertContext"
+import { useAuth } from "../AuthContext"
 import { BACKEND_URL } from "../config"
 export default function Detail(){
     const { id } = useParams()
     const { showAlert } = useAlert()
+    const { role } = useAuth()
+    const isRetailer = role === "Retailer"
     const [product, setProduct] = useState({})
     const [review, setReview] = useState("")
     const [comments, setComments] = useState([])
@@ -122,20 +125,22 @@ export default function Detail(){
                     <h1 className="font-display text-3xl font-semibold">{product.name}</h1>
                     <p className="price text-2xl text-accent-ink">₦{product.price}</p>
                     <p className="text-muted">{product.description}</p>
-                    <div className="mt-4 flex gap-3">
-                        <button
-                            className="btn-secondary flex-1"
-                            onClick={async() => {
-                                await addToCart(product)
-                            }}>
-                            Add to Cart
-                        </button>
-                        <button
-                            className="btn-primary flex-1"
-                            onClick={buyNow}>
-                            Buy Now
-                        </button>
-                    </div>
+                    {!isRetailer && (
+                        <div className="mt-4 flex gap-3">
+                            <button
+                                className="btn-secondary flex-1"
+                                onClick={async() => {
+                                    await addToCart(product)
+                                }}>
+                                Add to Cart
+                            </button>
+                            <button
+                                className="btn-primary flex-1"
+                                onClick={buyNow}>
+                                Buy Now
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
             <div className="flex flex-col gap-5 border-t border-line pt-10">
